@@ -8,18 +8,23 @@
 
 ## 1. Executive Summary
 
-This document presents the technical architecture for an emotion-aware music recommendation system that maps facial emotions from video to personalized music selections. The system employs a three-stage pipeline (perceive → stabilize → match) leveraging transfer learning and state-of-the-art deep learning models to create a robust proof-of-concept that aligns musical content with detected emotional states.
+Modern organizations face a critical challenge in creating environments that respond dynamically to the emotional interplay between people and spaces. Static background music fails to address the complex relationship between environmental design and human emotional states, missing opportunities to enhance experiences and drive business outcomes.
 
-The architecture utilizes the FindingEmo dataset containing 25,000 images annotated with valence-arousal values for emotion recognition training, and the DEAM dataset comprising 1,802 songs with dynamic emotion annotations for music retrieval. The implementation follows a phased approach that progressively addresses two critical risks: context-only learning where facial expressions are ignored in favor of scene elements, and unstable recommendations that create poor user experience through excessive switching.
+Our emotion-aware music system employs dual-pathway detection to understand both the designed intent of spaces and actual human emotional responses within them. By discriminating between environmental ambiance and genuine human emotions, the system delivers contextually appropriate music that measurably improves user experiences. The technology recognizes that identical emotional expressions require different musical interventions depending on environmental context, enabling intelligent atmospheric orchestration across diverse industry applications.
 
-The system design emphasizes practical implementation through strategic use of pre-trained models while incorporating targeted enhancements to ensure robust emotion detection grounded in facial features and stable music recommendations that respond appropriately to emotional changes.
+At runtime, the system still follows the perceive → stabilize → match pipeline, with uncertainty-aware fusion and temporal smoothing to ensure enterprise-grade reliability and smooth transitions.
 
 ---
 
 ### The Problem We're Solving
 
-Many people struggle with emotional awareness - difficulty identifying what they're feeling or understanding their emotional patterns throughout the day. This system serves as an emotional mirror with therapeutic potential. By analyzing facial expressions over time (not just single moments), it helps users understand their emotional journey and provides music scientifically matched to either validate their current state or gently guide them toward improved mood.
-The system tracks emotional trends across video segments, revealing patterns users might not consciously recognize. Beyond simple detection, it leverages music's therapeutic power by recommending songs with specific valence-arousal signatures that can help regulate emotions - calming music when detecting stress (high arousal, negative valence) or energizing tracks when detecting low mood (low arousal, negative valence).
+Static background music does not account for the dynamic interplay between environmental design and human emotion. Identical facial expressions can require different musical interventions depending on the surrounding context (e.g., clinical waiting room vs. luxury retail boutique), leading to mismatched ambiance and suboptimal outcomes.
+
+Single-source emotion detection also suffers from a fundamental attribution problem: systems conflate environmental cues with genuine human emotional state. Our approach explicitly separates and fuses scene context with facial signals using inverse-variance weighting, and stabilizes outputs with uncertainty-aware temporal smoothing. This yields explainable, context-appropriate recommendations that improve user experience and business metrics.
+
+- Inverse-variance fusion (intuitive): We trust the signal that’s more confident. Clear faces → face signal leads. Occlusions or no faces → scene signal leads. When both are confident, we blend them so neither dominates.
+- Uncertainty-aware smoothing (intuitive): We smooth frame-to-frame changes. If the system is unsure, we briefly hold the last stable value instead of reacting. When confidence returns, updates resume—preventing jitter and sudden music flips.
+- Example: Dramatic store lighting suggests “tense,” but customers’ faces show calm curiosity. A scene-only system picks intense tracks; ours selects gentle, sophisticated instrumentals that fit the context and keep shoppers comfortable.
 
 ---
 ### TLDR
