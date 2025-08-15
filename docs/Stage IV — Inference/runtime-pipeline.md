@@ -20,7 +20,7 @@ Three-stage runtime pipeline that converts video frames into music segment recom
 +------------------------------------------+
 | PERCEIVE: Extract V-A per frame         |
 | Phase 0: Scene model predictions        |
-| Phase 1: + Face detection & prediction  |
+| Phase 1: + Face detection, alignment & EmoNet (via adapter) |
 | Phase 2: + Fusion of both paths         |
 | + MC Dropout uncertainty estimation     |
 +------------------------------------------+
@@ -50,7 +50,7 @@ Three-stage runtime pipeline that converts video frames into music segment recom
 
 - PERCEIVE
   - Scene model: CLIP/ViT backbone, regression heads with dropout; MC Dropout for mean/variance.
-  - Face path: single-face detection and face emotion regressor.
+  - Face path: single-face detection (MediaPipe), face alignment, and EmoNet inference via an adapter that handles preprocessing, calibration (EmoNet→FindingEmo), and optional TTA-based uncertainty.
   - Fusion: variance-weighted averaging when both paths available; fall back to scene-only when no face.
 
 - STABILIZE

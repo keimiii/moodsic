@@ -23,11 +23,11 @@ class SceneFaceFusion:
 ## Fixed-Weight Search (Phase 2)
 
 ```python
-def optimize_fusion_weights(self, scene_model, face_model, val_data):
+def optimize_fusion_weights(self, scene_model, face_expert, val_data):
     best_w, best_score = None, float('inf')
     for scene_w in np.arange(0.3, 0.8, 0.1):
         face_w = 1 - scene_w
-        fusion = SceneFaceFusion(scene_model, face_model, SingleFaceProcessor())
+        fusion = SceneFaceFusion(scene_model, face_expert, SingleFaceProcessor())
         fusion.scene_weight, fusion.face_weight = scene_w, face_w
         val_loss = self._evaluate_fusion(fusion, val_data)
         if val_loss < best_score:

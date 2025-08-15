@@ -8,8 +8,8 @@
 ## Core Defaults (from architecture)
 
 - Scene model dropout: `0.3`
-- Face model dropout: `0.3`
-- MC Dropout samples: `5` (training/eval); demo uses `10` for robustness
+- Scene MC Dropout samples: `5` (training/eval); demo uses `10` for robustness
+- EmoNet TTA samples: `5` (PERCEIVE)
 - EMA alpha: `0.7`
 - Uncertainty threshold τ: `0.4` (demo shows `0.5`)
 - Fusion fixed weights (if not variance-weighted): `scene=0.6`, `face=0.4`
@@ -21,8 +21,8 @@
 - LR selection via LR finder (`learn.lr_find().valley`).
 - Schedules:
   - Phase 0: `fit_one_cycle(10, lr_max=lr)` with frozen backbone; then unfreeze and `fit_one_cycle(5, lr_max=slice(lr/100, lr/10))`.
-  - Phase 1: `fit_one_cycle(8, lr_max=lr)`.
-- Early stopping: `patience=5`.
+  - Phase 1: (N/A for face; EmoNet is fixed, no training.)
+- Early stopping: `patience=5` (scene model).
 
 ## Sweep Ranges
 

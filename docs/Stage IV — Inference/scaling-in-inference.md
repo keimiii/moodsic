@@ -6,7 +6,7 @@
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
 
-## Mapping
+## Mapping (FindingEmo → DEAM)
 
 Explicit mapping from FindingEmo to DEAM emotion space used for queries:
 
@@ -18,3 +18,16 @@ a_deam = -10.0 + (20.0 / 6.0) * a_fe
 ```
 
 These formulas are used in both `SegmentMatcher.recommend` and `SegmentLevelMusicMatcher.get_music_for_frame`.
+
+## Calibration (EmoNet → FindingEmo)
+
+When using EmoNet as the face expert, apply an affine calibration per dimension to map EmoNet outputs into FindingEmo ranges before the FE→DEAM mapping above:
+
+```
+v_fe ≈ a_v * v_emonet + b_v
+a_fe ≈ a_a * a_emonet + b_a
+```
+
+- Learn `(a_v, b_v, a_a, b_a)` on a small FindingEmo validation split.
+- Clamp to FE ranges after calibration: `v∈[-3, 3]`, `a∈[0, 6]`.
+- Store parameters in `models/emonet/calibration.json` and load in the EmoNet adapter.

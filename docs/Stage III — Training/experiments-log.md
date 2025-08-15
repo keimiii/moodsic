@@ -18,13 +18,13 @@ Checkpoint: checkpoints/scene_model.pth
 ```
 
 ```text
-Run ID: PHASE1-YYYYMMDD-HHMM
+Run ID: PHASE1-EMONET-YYYYMMDD-HHMM
 Commit: <git-sha>
-Data: Face crops vX (seed S)
-Model: FaceEmotionRegressor (dropout=0.3)
-Train: epochs=8, bs=..., lr=...
-Metrics: CCC_v=..., CCC_a=...; MAE_v=..., MAE_a=...
-Checkpoint: checkpoints/face_model.pth
+Setup: models/emonet/ present; checkpoints in models/emonet/pretrained/
+Calibration: models/emonet/calibration.json (a_v=..., b_v=..., a_a=..., b_a=...)
+TTA: 5
+Metrics: CCC_v=..., CCC_a=...; MAE_v=..., MAE_a=... (on FE validation)
+Notes: clamped to FE ranges
 ```
 
 ```text
@@ -45,5 +45,5 @@ Stability: jitter_reduction=...%, gating_freq=...
 ## Best Models Summary
 
 - Phase 0 best: <run-id> — CCC_v=..., CCC_a=...
-- Phase 1 best: <run-id> — CCC_v=..., CCC_a=...
 - Fusion best: weights=(..., ...) — validation loss=...
+- EmoNet calibration best: (a_v=..., b_v=..., a_a=..., b_a=...) — val CCC: v=..., a=...

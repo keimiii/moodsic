@@ -1,8 +1,8 @@
-# Face Model
+# Face Path (EmoNet)
 
 - [ ] Implement `SingleFaceProcessor` (MediaPipe) to extract primary face
-- [ ] Prepare face-crops dataset from FindingEmo
-- [ ] Implement face emotion regressor (light ResNet18 backbone)
+- [ ] Apply face alignment prior to inference (face-alignment library)
+- [ ] Integrate EmoNet via an adapter that handles alignment, normalization, inference, TTA uncertainty, and calibration (EmoNet→FindingEmo)
 - [ ] Evaluate face detection rate and impact
 
 ## Face Detection and Cropping
@@ -55,51 +55,15 @@ class SingleFaceProcessor:
         return cv2.resize(crop, (224, 224))
 ```
 
-## Face Emotion Regressor
-Lightweight ResNet18 backbone with separate V/A heads and dropout; supports MC Dropout.
+## EmoNet Integration (Adapter)
+The adapter wraps EmoNet for inference:
+- Align face crop → resize → EmoNet normalization
+- Forward pass → continuous V/A
+- Optional TTA (flip/jitter) → mean/variance
+- Apply calibration (EmoNet→FindingEmo), clamp to FE ranges
 
 ```python
-import torch
-import torch.nn as nn
-
-class FaceEmotionRegressor(nn.Module):
-    def __init__(self, dropout_rate=0.3):
-        super().__init__()
-        self.backbone = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
-        for p in list(self.backbone.parameters())[:-10]:
-            p.requires_grad = False
-        num_features = self.backbone.fc.in_features
-        self.backbone.fc = nn.Identity()
-        self.dropout = nn.Dropout(dropout_rate)
-        self.valence_head = nn.Sequential(nn.Linear(num_features, 128), nn.ReLU(), self.dropout, nn.Linear(128, 1))
-        self.arousal_head = nn.Sequential(nn.Linear(num_features, 128), nn.ReLU(), self.dropout, nn.Linear(128, 1))
-
-    def forward(self, face_images, n_samples=1):
-        if n_samples > 1:
-            return self._mc_forward(face_images, n_samples)
-        feats = self.backbone(face_images)
-        feats = self.dropout(feats)
-        v = self.valence_head(feats).squeeze()
-        a = self.arousal_head(feats).squeeze()
-        return v, a
-
-    def _mc_forward(self, images, n_samples):
-        preds = []
-        for _ in range(n_samples):
-            v, a = self.forward(images, n_samples=1)
-            preds.append(torch.stack([v, a]))
-        preds = torch.stack(preds)
-        mean = preds.mean(dim=0)
-        var = preds.var(dim=0)
-        return mean, var
+v, a, (v_var, a_var) = face_expert.predict(face_crop, tta=5)
 ```
 
-## Dataset Preparation (for training)
-- Extract face crops from FindingEmo, preserving V/A labels
-- Save metadata to `face_annotations.csv` for dataloaders
-
-```python
-class FaceDatasetPreparer:
-    # See implementation in overview for details
-    ...
-```
+Training a separate face regressor is not required; EmoNet serves as the face expert.

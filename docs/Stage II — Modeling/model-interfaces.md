@@ -15,13 +15,13 @@ v, a = scene_model(pixel_values)                    # shapes: [B], [B]
 mean, var = scene_model(pixel_values, n_samples=5)  # shapes: [2, B], [2, B]
 ```
 
-## FaceEmotionRegressor
-- Input: face tensor(s), shape `[B, 3, 224, 224]`
-- Output: same contract as scene model; supports MC Dropout
+## Face Expert: EmoNet Adapter
+- Input: primary face crop as BGR/RGB `np.ndarray` of shape `[H, W, 3]` (adapter handles alignment + resize + normalization)
+- Output: `(valence_fe: float, arousal_fe: float, variance: (float, float))` in FindingEmo ranges
+- Uncertainty: via TTA (e.g., `tta=5`) rather than MC Dropout
 
 ```python
-v, a = face_model(faces)
-mean, var = face_model(faces, n_samples=5)
+v, a, (v_var, a_var) = face_expert.predict(face_bgr, tta=5)
 ```
 
 ## SingleFaceProcessor
