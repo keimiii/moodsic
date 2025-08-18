@@ -1,6 +1,6 @@
 # Emotion-Aware Music Recommendation from Facial Video — Technical Architecture
 
-**Revision:** Aug 9, 2025  
+**Revision:** Aug 15, 2025  
 **Team:** 4 members (≈40 man-days total)  
 **Course:** NUS MTech in AI Systems
 
@@ -8,18 +8,23 @@
 
 ## 1. Executive Summary
 
-This document presents the technical architecture for an emotion-aware music recommendation system that maps facial emotions from video to personalized music selections. The system employs a three-stage pipeline (perceive → stabilize → match) leveraging transfer learning and state-of-the-art deep learning models to create a robust proof-of-concept that aligns musical content with detected emotional states.
+Modern organizations face a critical challenge in creating environments that respond dynamically to the emotional interplay between people and spaces. Static background music fails to address the complex relationship between environmental design and human emotional states, missing opportunities to enhance experiences and drive business outcomes.
 
-The architecture utilizes the FindingEmo dataset containing 25,000 images annotated with valence-arousal values for emotion recognition training, and the DEAM dataset comprising 1,802 songs with dynamic emotion annotations for music retrieval. The implementation follows a phased approach that progressively addresses two critical risks: context-only learning where facial expressions are ignored in favor of scene elements, and unstable recommendations that create poor user experience through excessive switching.
+Our emotion-aware music system employs dual-pathway detection to understand both the designed intent of spaces and actual human emotional responses within them. By discriminating between environmental ambiance and genuine human emotions, the system delivers contextually appropriate music that measurably improves user experiences. The technology recognizes that identical emotional expressions require different musical interventions depending on environmental context, enabling intelligent atmospheric orchestration across diverse industry applications.
 
-The system design emphasizes practical implementation through strategic use of pre-trained models while incorporating targeted enhancements to ensure robust emotion detection grounded in facial features and stable music recommendations that respond appropriately to emotional changes.
+At runtime, the system still follows the perceive → stabilize → match pipeline, with uncertainty-aware fusion and temporal smoothing to ensure enterprise-grade reliability and smooth transitions.
 
 ---
 
 ### The Problem We're Solving
 
-Many people struggle with emotional awareness - difficulty identifying what they're feeling or understanding their emotional patterns throughout the day. This system serves as an emotional mirror with therapeutic potential. By analyzing facial expressions over time (not just single moments), it helps users understand their emotional journey and provides music scientifically matched to either validate their current state or gently guide them toward improved mood.
-The system tracks emotional trends across video segments, revealing patterns users might not consciously recognize. Beyond simple detection, it leverages music's therapeutic power by recommending songs with specific valence-arousal signatures that can help regulate emotions - calming music when detecting stress (high arousal, negative valence) or energizing tracks when detecting low mood (low arousal, negative valence).
+Static background music does not account for the dynamic interplay between environmental design and human emotion. Identical facial expressions can require different musical interventions depending on the surrounding context (e.g., clinical waiting room vs. luxury retail boutique), leading to mismatched ambiance and suboptimal outcomes.
+
+Single-source emotion detection also suffers from a fundamental attribution problem: systems conflate environmental cues with genuine human emotional state. Our approach explicitly separates and fuses scene context with facial signals using inverse-variance weighting, and stabilizes outputs with uncertainty-aware temporal smoothing. This yields explainable, context-appropriate recommendations that improve user experience and business metrics.
+
+- Inverse-variance fusion (intuitive): We trust the signal that’s more confident. Clear faces → face signal leads. Occlusions or no faces → scene signal leads. When both are confident, we blend them so neither dominates.
+- Uncertainty-aware smoothing (intuitive): We smooth frame-to-frame changes. If the system is unsure, we briefly hold the last stable value instead of reacting. When confidence returns, updates resume—preventing jitter and sudden music flips.
+- Example: Dramatic store lighting suggests “tense,” but customers’ faces show calm curiosity. A scene-only system picks intense tracks; ours selects gentle, sophisticated instrumentals that fit the context and keep shoppers comfortable.
 
 ---
 ### TLDR
@@ -36,7 +41,7 @@ This shared measurement system enables direct emotion mapping between video and 
 
 **The Scene Model** examines entire frames - lighting, colors, environment - providing context about overall mood. However, it can be misled by environmental factors.
 
-**The Face Model** focuses exclusively on facial expressions, providing direct emotional signals. This grounds predictions in actual human expressions rather than just environmental cues.
+**The Face Expert (EmoNet)** focuses exclusively on facial expressions, providing direct emotional signals. This grounds predictions in actual human expressions rather than just environmental cues.
 
 Training these separately allows each model to specialize, learning distinct patterns relevant to their focus area.
 
@@ -69,7 +74,18 @@ The system fulfills three of four course requirements through its technical impl
 
 ---
 
+Update: EmoNet integration for face pathway (Aug 15, 2025)
+
+- Decision: Replace the Phase 1 face model with the pretrained EmoNet face-affect estimator as the face expert. No face-model training is needed for the MVP.
+- Preprocessing: Use single-face detection (MediaPipe) to select the primary face, then apply face alignment (face-alignment library) to match EmoNet's expected input. Resize/normalize exactly as per EmoNet demo.
+- Uncertainty: Approximate with test-time augmentation (TTA; e.g., flip and small scale/crop jitter) and use the prediction variance with the existing uncertainty gating.
+- Calibration: Fit a per-dimension affine mapping on a small FindingEmo validation split to transform EmoNet valence/arousal to FindingEmo space; then apply the existing FE→DEAM mapping in MATCH.
+- Fusion: Keep the current inverse-variance fusion between scene and face experts. EmoNet serves as the face expert; optional student model can be added later as a distilled replacement or fallback.
+- Licensing: EmoNet is CC BY-NC-ND 4.0. We will not fine-tune or modify the weights. For distribution, prefer loading checkpoints from upstream or a download script with attribution; if vendoring unmodified weights, preserve the original license and attribution and keep the project non-commercial.
+
 ## 3. System Architecture
+
+Face path: EmoNet (pretrained) serves as the face expert; scene path remains CLIP/ViT fine-tuned on FindingEmo. Fusion uses inverse-variance weighting.
 
 ### Complete Processing Pipeline with Phased Implementation
 
@@ -92,8 +108,8 @@ FindingEmo Dataset (25k images with V-A labels)
          |             |
          v             v
     [Phase 0]      [Phase 1]
-    Scene Model    Face Model
-    (CLIP/ViT)     (Single-face)
+    Scene Model    Face Expert: EmoNet
+    (CLIP/ViT)     (pretrained)
          |             |
          ---------------
                 |
@@ -130,7 +146,7 @@ DEAM Dataset (1802 songs with dynamic V-A)
 +------------------------------------------+
 | PERCEIVE: Extract V-A per frame         |
 | Phase 0: Scene model predictions        |
-| Phase 1: + Face detection & prediction  |
+| Phase 1: + Face detection, alignment & EmoNet inference  |
 | Phase 2: + Fusion of both paths         |
 | + MC Dropout uncertainty estimation     |
 +------------------------------------------+
@@ -418,9 +434,9 @@ class AdaptiveStabilizer:
         }
 ```
 
-### Phase 1: Face-Aware Enhancement (Days 4-6)
+### Phase 1: Face-Aware Enhancement with EmoNet (Days 4-6)
 
-The second phase addresses context overfitting by incorporating facial features through a simplified single-face approach that avoids the complexity of multiple instance learning while ensuring predictions are grounded in facial expressions.
+The second phase replaces an in-house face regressor with the pretrained EmoNet model as the face expert. We detect the primary face per frame (MediaPipe), apply face alignment to match EmoNet’s expected input, and run EmoNet to obtain continuous valence/arousal. We estimate uncertainty via lightweight test-time augmentation (e.g., flip/jitter) and feed both means and variances into the existing fusion and stabilization modules.
 
 #### Single-Face Detection and Processing
 
@@ -734,58 +750,15 @@ class SegmentLevelMusicMatcher:
 
 ## 6. Training and Optimization
 
-### 6.1 Data Preparation for Face Training
+### 6.1 Scene Model Training (Face path uses EmoNet; no face training)
 
-The face model training requires extracting face crops from FindingEmo images while maintaining the original valence-arousal labels.
+We use EmoNet as the face expert with no face dataset or training required. This section is intentionally simplified to focus on scene model training; the face path is plug-and-play via EmoNet.
 
-```python
-from pathlib import Path
-import json
 
-class FaceDatasetPreparer:
-    def __init__(self, findingemo_path, output_path):
-        self.findingemo_path = Path(findingemo_path)
-        self.output_path = Path(output_path)
-        self.face_processor = SingleFaceProcessor()
-        
-    def prepare_face_dataset(self):
-        annotations = pd.read_csv(self.findingemo_path / 'annotations.csv')
-        face_data = []
-        
-        for idx, row in annotations.iterrows():
-            img_path = self.findingemo_path / 'images' / row['image_id']
-            
-            if not img_path.exists():
-                continue
-            
-            # Load and process image
-            image = cv2.imread(str(img_path))
-            face_crop = self.face_processor.extract_primary_face(image)
-            
-            if face_crop is not None:
-                # Save face crop
-                face_filename = f"face_{row['image_id']}"
-                face_path = self.output_path / 'faces' / face_filename
-                cv2.imwrite(str(face_path), face_crop)
-                
-                # Record annotation
-                face_data.append({
-                    'face_path': face_filename,
-                    'valence': row['valence'],
-                    'arousal': row['arousal'],
-                    'original_image': row['image_id']
-                })
-        
-        # Save face dataset metadata
-        face_df = pd.DataFrame(face_data)
-        face_df.to_csv(self.output_path / 'face_annotations.csv', index=False)
-        
-        return face_df
-```
 
-### 6.2 Training Protocol
+### 6.2 Scene Model Fine-tuning Protocol (face path uses EmoNet; no face fine-tuning)
 
-The training follows a systematic approach for both scene and face models with careful hyperparameter tuning.
+The training covers only the scene model. The face path uses EmoNet as a fixed pretrained expert and is not trained or fine-tuned.
 
 ```python
 from fastai.vision.all import *
@@ -820,23 +793,7 @@ class PhaseTrainer:
         
         return learn
     
-    def train_phase_1(self):
-        # Face model training
-        face_dls = self._prepare_face_dataloaders()
-        face_model = FaceEmotionRegressor()
-        
-        learn = Learner(
-            face_dls,
-            face_model,
-            loss_func=self._combined_loss,
-            metrics=[self._ccc_metric, mae],
-            cbs=[EarlyStoppingCallback(patience=5)]
-        )
-        
-        lr = learn.lr_find().valley
-        learn.fit_one_cycle(8, lr_max=lr)
-        
-        return learn
+    # Face training is not used: EmoNet is the face expert and remains fixed (no training).
     
     def optimize_fusion_weights(self, scene_model, face_model, val_data):
         # Grid search for optimal fusion weights
@@ -910,9 +867,9 @@ The evaluation framework employs carefully selected metrics for each pipeline st
 
 ### 7.2 Ablation Studies
 
-#### Study 1: Scene-Only vs Face-Enhanced Performance
+#### Study 1: Scene-Only vs EmoNet-Enhanced Performance
 
-This study quantifies the improvement from incorporating facial features by comparing Phase 0 (scene-only) against Phase 1 (scene + single-face). The evaluation measures CCC improvement, reduction in context-dependent errors, and performance on multi-person scenes where facial grounding is critical.
+This study quantifies the improvement from incorporating EmoNet by comparing Phase 0 (scene-only) against Phase 1 (scene + EmoNet face expert). The evaluation measures CCC improvement, reduction in context-dependent errors, and performance on multi-person scenes where facial grounding is critical.
 
 #### Study 2: Impact of Uncertainty Gating
 
@@ -1152,6 +1109,31 @@ gradio==3.50.0          # Demo interface
 matplotlib==3.7.1       # Visualization
 tqdm==4.65.0           # Progress tracking
 ```
+
+### 11.1 EmoNet Integration and Licensing
+
+- Face expert: EmoNet (pretrained), integrated via an adapter that aligns inputs (face-alignment), matches EmoNet normalization, and outputs valence/arousal for fusion and stabilization.
+- Calibration: Fit per-dimension affine transforms on a small FindingEmo validation split to map EmoNet outputs into FindingEmo’s V/A space; then apply FE→DEAM mapping in MATCH as defined earlier. Store calibration parameters with the model artifacts.
+- Uncertainty: Use test-time augmentation (e.g., horizontal flip and minor crop/scale jitter) to obtain a prediction variance for inverse-variance fusion and uncertainty gating.
+- Distribution and license:
+  - EmoNet is released under CC BY-NC-ND 4.0. We will not modify or fine-tune the weights for distribution.
+  - Recommended practice: do not vendor weights; provide an automated download step (or load from upstream) with proper attribution and a clear non-commercial notice. If vendoring unmodified checkpoints becomes necessary for offline use, preserve the original license file and attribution and keep the repository non-commercial.
+
+### 11.2 Files to vendor from EmoNet (unmodified)
+
+Copy the following from https://github.com/face-analysis/emonet into `models/emonet/` in this repo. Keep directory names and filenames unchanged; do not modify the contents. Preserve the license and attribution.
+
+- LICENSE.txt → models/emonet/LICENSE.txt
+- README.md → models/emonet/README.md
+- emonet/ → models/emonet/emonet/ (entire package directory)
+- pretrained/ → models/emonet/pretrained/ (all files; includes 5-class and 8-class checkpoints)
+
+Optional (for reference/testing, not required by our pipeline):
+- demo.py, demo_video.py
+
+Notes:
+- We use EmoNet as an unmodified face expert under CC BY-NC-ND 4.0; no fine-tuning or weight modification will be distributed.
+- If we decide not to vendor checkpoints, replace `pretrained/` with a small download script that fetches from upstream at setup time and stores under `models/emonet/pretrained/`.
 
 ---
 

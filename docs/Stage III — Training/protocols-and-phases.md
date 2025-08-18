@@ -1,7 +1,7 @@
 # Training Protocols and Phases
 
 - [✅] Define Phase 0/1/2 training flow (freeze → unfreeze; face; fusion)
-- [ ] Implement dataloaders for scene/face datasets
+- [ ] Implement dataloaders for scene dataset (face path uses EmoNet; no face dataloaders needed)
 - [ ] Run LR finder per phase and record selected LRs
 - [ ] Validate fusion on held-out set and store final weights
 
@@ -31,25 +31,14 @@ class PhaseTrainer:
         return learn
 ```
 
-## Phase 1 — Face Regressor
+## Phase 1 — EmoNet Integration (no face training)
 
-- Single-face crops (prepared from FindingEmo) with lightweight backbone.
-- Training protocol mirrors Phase 0 (LR finder, early stopping).
+- Use EmoNet as a fixed face expert via the adapter (alignment, normalization, calibration).
+- Validate calibration parameters on a small FE validation split; clamp outputs to FE ranges.
+- Provide TTA-based uncertainty (e.g., tta=5) for fusion and gating.
 
-```python
-def train_phase_1(self):
-    face_dls = self._prepare_face_dataloaders()
-    face_model = FaceEmotionRegressor()
-    learn = Learner(
-        face_dls,
-        face_model,
-        loss_func=self._combined_loss,
-        metrics=[self._ccc_metric, mae],
-        cbs=[EarlyStoppingCallback(patience=5)]
-    )
-    lr = learn.lr_find().valley
-    learn.fit_one_cycle(8, lr_max=lr)
-    return learn
+```text
+No training in this phase. Ensure models/emonet/ is set up; load checkpoints from models/emonet/pretrained/ and calibration from models/emonet/calibration.json.
 ```
 
 ## Phase 2 — Fusion Optimization
@@ -57,11 +46,11 @@ def train_phase_1(self):
 - Combine scene and face via variance-weighted averaging; optionally tune fixed weights on validation set.
 
 ```python
-def optimize_fusion_weights(self, scene_model, face_model, val_data):
+def optimize_fusion_weights(self, scene_model, face_expert, val_data):
     best_weights, best_score = None, float('inf')
     for scene_w in np.arange(0.3, 0.8, 0.1):
         face_w = 1 - scene_w
-        fusion = SceneFaceFusion(scene_model, face_model, SingleFaceProcessor())
+        fusion = SceneFaceFusion(scene_model, face_expert, SingleFaceProcessor())
         fusion.scene_weight, fusion.face_weight = scene_w, face_w
         val_loss = self._evaluate_fusion(fusion, val_data)
         if val_loss < best_score:

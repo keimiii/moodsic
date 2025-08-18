@@ -19,9 +19,9 @@ import torch
 import cv2
 
 class SceneFaceFusion:
-    def __init__(self, scene_model, face_model, face_processor):
+    def __init__(self, scene_model, face_expert, face_processor):
         self.scene_model = scene_model
-        self.face_model = face_model
+        self.face_expert = face_expert  # EmoNet adapter
         self.face_processor = face_processor
         self.scene_weight = 0.6
         self.face_weight = 0.4
@@ -32,8 +32,10 @@ class SceneFaceFusion:
 
         face_crop = self.face_processor.extract_primary_face(frame)
         if face_crop is not None:
-            face_tensor = self._preprocess_frame(face_crop)
-            face_mean, face_var = self.face_model(face_tensor, n_samples=n_mc_samples)
+            # Adapter handles alignment, normalization, calibration; returns mean/var via TTA
+            v_face, a_face, (v_var_face, a_var_face) = self.face_expert.predict(face_crop, tta=n_mc_samples)
+            face_mean = torch.stack([torch.tensor(v_face), torch.tensor(a_face)])
+            face_var = torch.stack([torch.tensor(v_var_face), torch.tensor(a_var_face)])
             if use_variance_weighting:
                 final_pred, final_var = self._variance_weighted_fusion(scene_mean, scene_var, face_mean, face_var)
             else:
