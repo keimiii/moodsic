@@ -1,4 +1,4 @@
-# Emotion-Aware Music Recommendation from Facial Video — Technical Architecture
+# Emotion-Aware Environmental Orchestration: Adaptive Music for Dynamic Spaces — Technical Architecture
 
 **Revision:** Aug 15, 2025  
 **Team:** 4 members (≈40 man-days total)  
