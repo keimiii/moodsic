@@ -12,7 +12,8 @@
 
 ## Label Ranges
 - FindingEmo: Valence `[-3, 3]`, Arousal `[0, 6]`.
-- DEAM: Valence `[-10, 10]`, Arousal `[-10, 10]`.
+- DEAM dynamic: Valence `[-10, 10]`, Arousal `[-10, 10]`.
+- DEAM static: Valence `[1, 9]`, Arousal `[1, 9]` (used in this academic POC).
 
 ## Integrity Checks
 - Verify train/val/test splits (no leakage).

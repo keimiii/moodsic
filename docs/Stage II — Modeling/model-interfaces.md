@@ -54,5 +54,5 @@ metrics = stabilizer.get_stability_metrics()
 ```
 
 ## Notes
-- Scale alignment (FE→DEAM) is handled in the matching stage, not in model interfaces
+- Scale alignment (FE→DEAM static [1, 9] for this POC) is handled in the matching stage, not in model interfaces
 - Device/batching: models accept batched tensors; fusion path uses batch size `1` at runtime

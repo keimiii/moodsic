@@ -14,6 +14,7 @@
   - Minimum dwell time: 20–30 seconds; maintain recent-song memory to avoid repeats
 
 - Scale alignment:
-  - FE→DEAM mappings used during retrieval:
-    - `v_deam = (10/3) * v_fe`
-    - `a_deam = -10 + (20/6) * a_fe`
+  - POC uses DEAM static annotations `[1, 9]` (dynamic `[-10, 10]` also available).
+  - FE→DEAM mappings used during retrieval (static [1, 9]):
+    - `v_deam = 1 + (8/6) * (v_fe + 3)`
+    - `a_deam = 1 + (8/6) * a_fe`

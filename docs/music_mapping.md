@@ -12,6 +12,16 @@
 
 ## Enhanced Therapeutic Mapping Strategies
 
+Note: For this academic POC, we use DEAM static annotations `[1, 9]`. Mapping from FindingEmo to DEAM static:
+
+```python
+# FindingEmo: valence in [-3,3], arousal in [0,6]
+def fe_to_deam_static(v_fe: float, a_fe: float):
+    v_deam = 1.0 + (8.0/6.0) * (v_fe + 3.0)
+    a_deam = 1.0 + (8.0/6.0) * a_fe
+    return v_deam, a_deam
+```
+
 ### **1. Valence-Arousal Quadrant-Based Therapy**
 
 Based on the valence-arousal model, we can implement different therapeutic strategies for each emotional quadrant:
@@ -66,7 +76,7 @@ def _gradual_improvement(self, current_v, current_a, quadrant):
         target_a = current_a + 0.6  # Increase arousal
         
     # Find music segments closest to target emotional state
-    v_deam, a_deam = fe_to_deam(target_v, target_a)
+    v_deam, a_deam = fe_to_deam_static(target_v, target_a)
     return self._find_therapeutic_segment(v_deam, a_deam)
 ```
 
@@ -82,7 +92,7 @@ def _emotional_regulation(self, current_v, current_a, quadrant):
         target_a = current_a - 1.5  # Significant arousal reduction
         
         # Find calming music with gentle positive valence
-        v_deam, a_deam = fe_to_deam(target_v, target_a)
+        v_deam, a_deam = fe_to_deam_static(target_v, target_a)
         return self._find_calming_segment(v_deam, a_deam)
     
     elif quadrant == "high_high":  # Over-excited
@@ -271,7 +281,7 @@ def _gradual_improvement(self, current_v, current_a, quadrant):
         target_a = current_a + 0.6  # Increase arousal
         
     # Find music segments closest to target emotional state
-    v_deam, a_deam = fe_to_deam(target_v, target_a)
+    v_deam, a_deam = fe_to_deam_static(target_v, target_a)
     return self._find_therapeutic_segment(v_deam, a_deam)
 ```
 
@@ -283,7 +293,7 @@ def _emotional_regulation(self, current_v, current_a, quadrant):
         target_a = current_a - 1.5  # Significant arousal reduction
         
         # Find calming music with gentle positive valence
-        v_deam, a_deam = fe_to_deam(target_v, target_a)
+        v_deam, a_deam = fe_to_deam_static(target_v, target_a)
         return self._find_calming_segment(v_deam, a_deam)
     
     elif quadrant == "high_high":  # Over-excited

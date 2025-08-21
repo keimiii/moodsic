@@ -38,7 +38,7 @@ Three-stage runtime pipeline that converts video frames into music segment recom
 | MATCH: Segment-level retrieval          |
 | - Query per stabilized frame            |
 | - k-NN over 10s DEAM segments          |
-| - Scale alignment (FE→DEAM)            |
+| - Scale alignment (FE→DEAM static [1, 9])            |
 | - Minimum dwell time (20-30s)          |
 +------------------------------------------+
      |
@@ -60,4 +60,4 @@ Three-stage runtime pipeline that converts video frames into music segment recom
 - MATCH
   - Query k-NN over DEAM 10s segments (50% overlap) indexed with KD-Tree.
   - Enforce minimum dwell time and recent-song avoidance.
-  - Use explicit FE→DEAM scaling for queries.
+  - Use explicit FE→DEAM static [1, 9] scaling for queries.

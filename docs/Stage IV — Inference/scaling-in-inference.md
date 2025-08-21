@@ -1,7 +1,7 @@
 # Scaling in Inference
 
 - [ ] Implement FE→DEAM mapping for both V and A
-- [ ] Verify FE ranges: V ∈ [-3, 3], A ∈ [0, 6]; DEAM in [-10, 10]
+- [ ] Verify FE ranges: V ∈ [-3, 3], A ∈ [0, 6]; DEAM static in [1, 9] (POC)
 - [ ] Use the same scaling in all inference paths (matching, diagnostics)
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
@@ -11,10 +11,10 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 Explicit mapping from FindingEmo to DEAM emotion space used for queries:
 
 ```python
-# Valence: [-3, 3] → [-10, 10]
-v_deam = (10.0 / 3.0) * v_fe
-# Arousal: [0, 6] → [-10, 10]
-a_deam = -10.0 + (20.0 / 6.0) * a_fe
+# Valence: [-3, 3] → [1, 9]
+v_deam = 1.0 + (8.0 / 6.0) * (v_fe + 3.0)
+# Arousal: [0, 6] → [1, 9]
+a_deam = 1.0 + (8.0 / 6.0) * a_fe
 ```
 
 These formulas are used in both `SegmentMatcher.recommend` and `SegmentLevelMusicMatcher.get_music_for_frame`.

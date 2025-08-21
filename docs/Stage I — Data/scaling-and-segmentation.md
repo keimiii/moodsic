@@ -6,9 +6,10 @@
 - [ ] Persist segment metadata
 
 ## FE→DEAM Scaling
-- Valence: `v_deam = (10/3) * v_fe`
-- Arousal: `a_deam = -10 + (20/6) * a_fe`
-- FE ranges: Valence `[-3, 3]`, Arousal `[0, 6]` → DEAM ranges `[-10, 10]`.
+- Note: For this academic POC we use DEAM static annotations `[1, 9]` (dynamic `[-10, 10]` also available).
+- Valence: `v_deam = 1 + (8/6) * (v_fe + 3)`
+- Arousal: `a_deam = 1 + (8/6) * a_fe`
+- FE ranges: Valence `[-3, 3]`, Arousal `[0, 6]` → DEAM static ranges `[1, 9]`.
 
 ## DEAM Segmentation
 - Window size: `10s`

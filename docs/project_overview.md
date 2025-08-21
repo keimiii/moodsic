@@ -264,11 +264,11 @@ from collections import deque
 from sklearn.neighbors import KDTree
 
 # FE ranges (confirm in config): V in [-3, 3], A in [0, 6]
-# DEAM dynamic ranges: both in [-10, 10]
+# For this academic POC: use DEAM static scale [1, 9] (per 45s excerpt). Dynamic [-10, 10] also available.
 
-def fe_to_deam(v_fe: float, a_fe: float):
-    v_deam = (10.0 / 3.0) * v_fe
-    a_deam = -10.0 + (20.0 / 6.0) * a_fe
+def fe_to_deam_static(v_fe: float, a_fe: float):
+    v_deam = 1.0 + (8.0 / 6.0) * (v_fe + 3.0)
+    a_deam = 1.0 + (8.0 / 6.0) * a_fe
     return v_deam, a_deam
 
 class DEAMSegmentProcessor:
@@ -691,9 +691,9 @@ class SegmentLevelMusicMatcher:
         self.min_dwell_time = 20  # seconds
         
     def get_music_for_frame(self, valence, arousal, current_time):
-        # Scale from FindingEmo to DEAM space
-        v_deam = self._scale_fe_to_deam(valence, 'valence')
-        a_deam = self._scale_fe_to_deam(arousal, 'arousal')
+        # Scale from FindingEmo to DEAM static [1, 9] space
+        v_deam = self._scale_fe_to_deam_static(valence, 'valence')
+        a_deam = self._scale_fe_to_deam_static(arousal, 'arousal')
         
         # Check if we should switch segments
         if self._should_switch_segment(current_time):
@@ -707,14 +707,14 @@ class SegmentLevelMusicMatcher:
         
         return self.current_segment
     
-    def _scale_fe_to_deam(self, value, dimension):
-        # Explicit mapping from FindingEmo to DEAM scales
+    def _scale_fe_to_deam_static(self, value, dimension):
+        # Explicit mapping from FindingEmo to DEAM static [1, 9]
         if dimension == 'valence':
-            # FindingEmo: [-3, 3] → DEAM: [-10, 10]
-            return (10/3) * value
+            # FindingEmo: [-3, 3] → DEAM: [1, 9]
+            return 1 + (8/6) * (value + 3)
         else:  # arousal
-            # FindingEmo: [0, 6] → DEAM: [-10, 10]
-            return -10 + (20/6) * value
+            # FindingEmo: [0, 6] → DEAM: [1, 9]
+            return 1 + (8/6) * value
     
     def _should_switch_segment(self, current_time):
         # Switch only after minimum dwell time

@@ -1,5 +1,7 @@
 # DEAM Indexing and kNN
 
+Note: For this academic POC we are using DEAM static annotations `[1, 9]` (whole 45s excerpt) and song-level retrieval. This page documents the optional dynamic-annotation path (per-frame `[-10, 10]`) for future work.
+
 - [ ] Segment DEAM into 10s windows with 50% overlap (2 Hz annotations)
 - [ ] Build KD-Tree over segment means in V-A space
 - [ ] Persist `segments_metadata` and KD-Tree for reuse
