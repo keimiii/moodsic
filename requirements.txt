@@ -51,3 +51,4 @@ urllib3==2.5.0
 findingemo-light
 aiohttp
 aiofiles
+gdown==5.2.0
