@@ -53,6 +53,20 @@ sv, sa = stabilizer.update(v, a, variance=(v_var, a_var))
 metrics = stabilizer.get_stability_metrics()
 ```
 
+## EmotionPipeline (Unified Interface)
+- Input: Raw model outputs (EmoNet valence/arousal)
+- Output: Target-scale predictions with optional domain calibration
+- Pipeline: `raw → scale_alignment → domain_calibration → final`
+
+```python
+from utils.emotion_pipeline import EmotionPipeline
+pipeline = EmotionPipeline(calibration_layer=calibration, enable_calibration=True)
+
+# Complete processing
+v_final, a_final = pipeline.emonet_to_findingemo(v_emonet, a_emonet)
+```
+
 ## Notes
 - Scale alignment (FE→DEAM static [1, 9] for this POC) is handled in the matching stage, not in model interfaces
+- Domain calibration (see `cross-domain-calibration.md`) optionally corrects systematic biases between emotion contexts
 - Device/batching: models accept batched tensors; fusion path uses batch size `1` at runtime

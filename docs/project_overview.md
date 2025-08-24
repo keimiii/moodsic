@@ -267,9 +267,11 @@ from sklearn.neighbors import KDTree
 # For this academic POC: use DEAM static scale [1, 9] (per 45s excerpt). Dynamic [-10, 10] also available.
 
 from utils.emotion_scale_aligner import EmotionScaleAligner
+from utils.emotion_pipeline import EmotionPipeline
 
-# Initialize unified scale aligner
+# Initialize unified scale aligner and optional domain calibration
 aligner = EmotionScaleAligner()
+pipeline = EmotionPipeline(enable_calibration=True)  # Load trained calibration if available
 
 class DEAMSegmentProcessor:
     def __init__(self, deam_path, window_size=10, overlap=0.5):
@@ -913,7 +915,7 @@ This study validates the importance of temporal granularity by comparing segment
 
 **Prediction Instability** is addressed through MC Dropout uncertainty estimation combined with adaptive gating, ensuring smooth music recommendations while maintaining responsiveness to genuine emotional changes.
 
-**Scale Misalignment** is resolved through explicit FindingEmo to DEAM scale mapping functions, preventing retrieval errors from incompatible emotion spaces.
+**Scale Misalignment** is resolved through explicit FindingEmo to DEAM scale mapping functions, with optional domain calibration to correct systematic biases between face-based and scene-based emotion predictions.
 
 ### Contingency Plans
 
