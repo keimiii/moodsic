@@ -17,7 +17,7 @@ import torch
 from pathlib import Path
 from tqdm import tqdm
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import StratifiedShuffleSplit
+
 from scipy.stats import pearsonr
 import mediapipe as mp
 import sys
@@ -196,6 +196,23 @@ def main(args):
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
     
+    # Load calibration if requested
+    calibration = None
+    if args.use_calibration:
+        calibration_path = results_dir / "calibration_emonet2findingemo.pt"
+        if calibration_path.exists():
+            sys.path.insert(0, str(project_root))
+            from models.calibration import CrossDomainCalibration
+            calibration = CrossDomainCalibration(l2_reg=1e-4, use_tanh=True)
+            calibration.load_state_dict(torch.load(calibration_path, map_location='cpu'))
+            calibration.eval()
+            print(f"Loaded calibration from: {calibration_path}")
+            print(f"Calibration params: {calibration.get_params_summary()}")
+        else:
+            print(f"Warning: Calibration file not found: {calibration_path}")
+            print("Run train_calibration.py first to train calibration model")
+            return 1
+    
     # Load annotations
     print("Loading processed annotations...")
     ann_df = pd.read_csv(project_root / "data/processed_annotations.csv")
@@ -223,13 +240,9 @@ def main(args):
     face_count = img_df["has_face"].sum()
     print(f"Images with faces: {face_count}/{len(img_df)} ({face_count/len(img_df)*100:.1f}%)")
     
-    # Train/test split stratified by has_face
-    print("Creating train/test split...")
-    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, test_idx = next(sss.split(img_df, img_df["has_face"]))
-    
-    test_df = img_df.iloc[test_idx].reset_index(drop=True)
-    print(f"Test set: {len(test_df)} images ({test_df['has_face'].sum()} with faces)")
+    # Use full dataset for evaluation (no train/test split needed for pretrained model)
+    print(f"Full dataset: {len(img_df)} images ({img_df['has_face'].sum()} with faces)")
+    test_df = img_df.reset_index(drop=True)
     
     # Load EmoNet
     print("Loading EmoNet...")
@@ -305,8 +318,19 @@ def main(args):
                         v_emonet = emonet_out['valence'].cpu().numpy()[0]
                         a_emonet = emonet_out['arousal'].cpu().numpy()[0]
                     
-                    # Convert to FindingEmo scale
-                    v_pred, a_pred = aligner.emonet_to_findingemo(v_emonet, a_emonet)
+                    # Apply calibration in reference space if enabled
+                    if calibration is not None:
+                        with torch.no_grad():
+                            v_tensor = torch.tensor(float(v_emonet)).unsqueeze(0)
+                            a_tensor = torch.tensor(float(a_emonet)).unsqueeze(0)
+                            v_cal, a_cal = calibration(v_tensor, a_tensor)
+                            v_emonet_cal, a_emonet_cal = float(v_cal.item()), float(a_cal.item())
+                            # Convert calibrated reference space to FindingEmo scale
+                            v_pred, a_pred = aligner.emonet_to_findingemo(v_emonet_cal, a_emonet_cal)
+                    else:
+                        # Convert uncalibrated to FindingEmo scale
+                        v_pred, a_pred = aligner.emonet_to_findingemo(v_emonet, a_emonet)
+                    
                     v_pred, a_pred = float(v_pred), float(a_pred)
                 else:
                     v_pred = a_pred = np.nan
@@ -391,6 +415,8 @@ if __name__ == "__main__":
                        help="Force CUDA usage (otherwise auto-detects MPS on Apple Silicon or falls back to CPU)")
     parser.add_argument("--cache-faces-only", action="store_true",
                        help="Only build face detection cache, don't run evaluation")
+    parser.add_argument("--use-calibration", action="store_true",
+                       help="Apply trained calibration to EmoNet predictions")
     
     args = parser.parse_args()
     exit(main(args))
