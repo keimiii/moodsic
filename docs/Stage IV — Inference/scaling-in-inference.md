@@ -1,33 +1,43 @@
 # Scaling in Inference
 
-- [ ] Implement FE→DEAM mapping for both V and A
-- [ ] Verify FE ranges: V ∈ [-3, 3], A ∈ [0, 6]; DEAM static in [1, 9] (POC)
-- [ ] Use the same scaling in all inference paths (matching, diagnostics)
+- [✅] Implement unified scale alignment with EmotionScaleAligner
+- [✅] Verified FE ranges: V ∈ [-3, 3], A ∈ [0, 6]; DEAM static in [1, 9] (POC)
+- [✅] Unified scaling used across all inference paths (matching, diagnostics)
 
-Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
+All scale conversions now use the unified EmotionScaleAligner class for consistency and maintainability.
 
-## Mapping (FindingEmo → DEAM)
+## Unified Scale Alignment
 
-Explicit mapping from FindingEmo to DEAM emotion space used for queries:
+All emotion scale conversions are handled by the EmotionScaleAligner class:
 
 ```python
-# Valence: [-3, 3] → [1, 9]
-v_deam = 1.0 + (8.0 / 6.0) * (v_fe + 3.0)
-# Arousal: [0, 6] → [1, 9]
-a_deam = 1.0 + (8.0 / 6.0) * a_fe
+from utils.emotion_scale_aligner import EmotionScaleAligner
+
+# Initialize aligner
+aligner = EmotionScaleAligner()
+
+# FindingEmo → DEAM static conversion
+v_deam, a_deam = aligner.findingemo_to_deam_static(v_fe, a_fe)
+
+# EmoNet → FindingEmo conversion (for face expert)
+v_fe, a_fe = aligner.emonet_to_findingemo(v_emonet, a_emonet)
+
+# Direct EmoNet → DEAM conversion
+v_deam, a_deam = aligner.emonet_to_deam_static(v_emonet, a_emonet)
 ```
 
-These formulas are used in both `SegmentMatcher.recommend` and `SegmentLevelMusicMatcher.get_music_for_frame`.
+The EmotionScaleAligner provides all necessary conversions between FindingEmo, DEAM static, and EmoNet scales through a unified reference space [-1, 1].
 
-## Calibration (EmoNet → FindingEmo)
+## EmoNet Integration
 
-When using EmoNet as the face expert, apply an affine calibration per dimension to map EmoNet outputs into FindingEmo ranges before the FE→DEAM mapping above:
+When using EmoNet as the face expert, the aligner handles the conversion automatically:
 
+```python
+# EmoNet outputs [-1, 1] can be used directly or converted to target scales
+v_fe, a_fe = aligner.emonet_to_findingemo(emonet_valence, emonet_arousal)
+v_deam, a_deam = aligner.emonet_to_deam_static(emonet_valence, emonet_arousal)
 ```
-v_fe ≈ a_v * v_emonet + b_v
-a_fe ≈ a_a * a_emonet + b_a
-```
 
-- Learn `(a_v, b_v, a_a, b_a)` on a small FindingEmo validation split.
-- Clamp to FE ranges after calibration: `v∈[-3, 3]`, `a∈[0, 6]`.
-- Store parameters in `models/emonet/calibration.json` and load in the EmoNet adapter.
+- No manual calibration needed - the aligner handles scale alignment
+- All conversions maintain numerical precision and handle edge cases
+- Strict mode available for validation during development

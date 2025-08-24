@@ -266,10 +266,10 @@ from sklearn.neighbors import KDTree
 # FE ranges (confirm in config): V in [-3, 3], A in [0, 6]
 # For this academic POC: use DEAM static scale [1, 9] (per 45s excerpt). Dynamic [-10, 10] also available.
 
-def fe_to_deam_static(v_fe: float, a_fe: float):
-    v_deam = 1.0 + (8.0 / 6.0) * (v_fe + 3.0)
-    a_deam = 1.0 + (8.0 / 6.0) * a_fe
-    return v_deam, a_deam
+from utils.emotion_scale_aligner import EmotionScaleAligner
+
+# Initialize unified scale aligner
+aligner = EmotionScaleAligner()
 
 class DEAMSegmentProcessor:
     def __init__(self, deam_path, window_size=10, overlap=0.5):
@@ -350,7 +350,7 @@ class SegmentMatcher:
             return self.current
         
         # Scale FE→DEAM for query
-        vq, aq = fe_to_deam(v_fe, a_fe)
+        vq, aq = self.aligner.findingemo_to_deam_static(v_fe, a_fe)
         distances, indices = self.kd_tree.query(np.array([[vq, aq]]), k=k)
         best = self._choose_candidate(indices, distances)
         
@@ -692,8 +692,7 @@ class SegmentLevelMusicMatcher:
         
     def get_music_for_frame(self, valence, arousal, current_time):
         # Scale from FindingEmo to DEAM static [1, 9] space
-        v_deam = self._scale_fe_to_deam_static(valence, 'valence')
-        a_deam = self._scale_fe_to_deam_static(arousal, 'arousal')
+        v_deam, a_deam = self._scale_fe_to_deam_static(valence, arousal)
         
         # Check if we should switch segments
         if self._should_switch_segment(current_time):
@@ -707,14 +706,14 @@ class SegmentLevelMusicMatcher:
         
         return self.current_segment
     
-    def _scale_fe_to_deam_static(self, value, dimension):
-        # Explicit mapping from FindingEmo to DEAM static [1, 9]
-        if dimension == 'valence':
-            # FindingEmo: [-3, 3] → DEAM: [1, 9]
-            return 1 + (8/6) * (value + 3)
-        else:  # arousal
-            # FindingEmo: [0, 6] → DEAM: [1, 9]
-            return 1 + (8/6) * value
+    def __init__(self, deam_processor):
+        self.processor = deam_processor
+        self.aligner = EmotionScaleAligner()
+        # ... rest of initialization
+    
+    def _scale_fe_to_deam_static(self, valence, arousal):
+        # Use unified aligner for FindingEmo → DEAM static conversion
+        return self.aligner.findingemo_to_deam_static(valence, arousal)
     
     def _should_switch_segment(self, current_time):
         # Switch only after minimum dwell time
