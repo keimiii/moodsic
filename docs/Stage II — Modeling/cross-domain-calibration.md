@@ -3,8 +3,8 @@
 - [✅] Implement 4-parameter affine transformation for domain bias correction
 - [✅] Support for EmoNet (face) → FindingEmo (scene) alignment
 - [✅] Learnable parameters with L2 regularization and identity initialization
-- [ ] Train calibration layer on validation subset of FindingEmo
-- [ ] Run ablation study to validate effectiveness
+- [✅] Train calibration layer on FindingEmo (reference space [-1,1])
+- [✅] Run ablation study to validate effectiveness
 
 ## Overview
 
@@ -21,17 +21,21 @@ CrossDomainCalibration corrects systematic biases between emotion recognition do
 
 ```python
 class CrossDomainCalibration(nn.Module):
-    def __init__(self):
+    def __init__(self, use_tanh: bool = False):
         # Learnable parameters (initialized to identity: no change)
         self.scale_v = nn.Parameter(torch.ones(1))   # Valence scaling
         self.scale_a = nn.Parameter(torch.ones(1))   # Arousal scaling  
         self.shift_v = nn.Parameter(torch.zeros(1))  # Valence offset
         self.shift_a = nn.Parameter(torch.zeros(1))  # Arousal offset
+        self.use_tanh = use_tanh
         
     def forward(self, v, a):
         v_out = v * self.scale_v + self.shift_v
         a_out = a * self.scale_a + self.shift_a
-        return torch.tanh(v_out), torch.tanh(a_out)  # Smooth clamping
+        if self.use_tanh:
+            # Optional smooth clamping; for training we keep it disabled to avoid range shrinkage
+            return torch.tanh(v_out), torch.tanh(a_out)
+        return v_out, a_out
 ```
 
 **Why 4 parameters?**
@@ -54,11 +58,12 @@ total_loss = 0.7 * ccc_loss + 0.3 * mse_loss + l2_reg
 l2_reg = λ * [(scale_v - 1)² + (scale_a - 1)² + shift_v² + shift_a²]
 ```
 
-**Training procedure:**
-1. Use subset of FindingEmo where you have both EmoNet predictions and ground truth
-2. Split into train/validation (80/20)
-3. Early stopping when validation loss plateaus
-4. Monitor parameters - if they stay near identity (1,1,0,0), remove layer
+**Training procedure (fixed):**
+1. Use faces-found subset of FindingEmo with EmoNet predictions and GT (EmoNet remains frozen)
+2. Convert both predictions and GT to reference space [-1,1]
+3. Evaluate the calibration layer out-of-sample (e.g., 80/20 val split or k-fold CV); train with CCC+MSE; disable tanh clamping during optimization
+4. Early stopping when validation loss plateaus; monitor parameters — if near identity, skip calibration
+5. Deployment: if calibration shows out-of-sample gains, refit the 4 parameters on 100% of the faces-found subset for the runtime model
 
 ## Integration Pipeline
 
@@ -119,3 +124,13 @@ v_baseline, a_baseline = pipeline.emonet_to_findingemo(v_emonet, a_emonet, apply
 pipeline = EmotionPipeline(enable_calibration=False)  # Baseline
 pipeline = EmotionPipeline(enable_calibration=True)   # With calibration
 ```
+
+## Results: EmoNet → FindingEmo (Aug 25, 2025)
+
+- Setup: Trained on faces-found subset in reference space [-1,1]; no tanh clamp during training; 4-parameter affine.
+- Baseline (faces-found): Valence CCC ≈ 0.167, Arousal CCC ≈ 0.016 (mean ≈ 0.092)
+- After calibration (A/B on same faces-found set): Valence CCC ≈ 0.295, Arousal CCC ≈ 0.064 (mean ≈ 0.180)
+- Ranking (r, ρ) unchanged → calibration corrects bias/scale, not ordering.
+- Holdout ceiling (best affine on validation split): Valence CCC ≈ 0.205, Arousal CCC ≈ 0.017 → simple linear mapping cannot close the gap.
+
+Conclusion: Calibration can modestly improve valence on FindingEmo but remains well below acceptable thresholds; arousal gains are small and often not significant. Use calibration only if it improves holdout CCC; otherwise omit. The headline POC metric should rely on fusion + gating rather than face-only.

@@ -1,6 +1,6 @@
 # Emotion-Aware Environmental Orchestration: Adaptive Music for Dynamic Spaces — Technical Architecture
 
-**Revision:** Aug 15, 2025  
+**Revision:** Aug 25, 2025  
 **Team:** 4 members (≈40 man-days total)  
 **Course:** NUS MTech in AI Systems
 
@@ -66,7 +66,7 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 
 The system fulfills three of four course requirements through its technical implementation:
 
-**Supervised Learning** is demonstrated through fine-tuning pre-trained vision models on the FindingEmo dataset, training regression heads to predict continuous valence and arousal values from both scene context and facial features.
+**Supervised Learning** is demonstrated through fine-tuning the scene model on the FindingEmo dataset (continuous valence/arousal regression). The face pathway (EmoNet) is used as a frozen expert in ablation studies and is not fine-tuned.
 
 **Deep Learning** forms the core of the system through transformer-based architectures including CLIP and vision transformers, which provide robust feature extraction for emotion recognition tasks.
 
@@ -79,9 +79,30 @@ Update: EmoNet integration for face pathway (Aug 15, 2025)
 - Decision: Replace the Phase 1 face model with the pretrained EmoNet face-affect estimator as the face expert. No face-model training is needed for the MVP.
 - Preprocessing: Use single-face detection (MediaPipe) to select the primary face, then apply face alignment (face-alignment library) to match EmoNet's expected input. Resize/normalize exactly as per EmoNet demo.
 - Uncertainty: Approximate with test-time augmentation (TTA; e.g., flip and small scale/crop jitter) and use the prediction variance with the existing uncertainty gating.
-- Calibration: Fit a per-dimension affine mapping on a small FindingEmo validation split to transform EmoNet valence/arousal to FindingEmo space; then apply the existing FE→DEAM mapping in MATCH.
+- Calibration (optional): Train/operate in reference space [-1, 1]; apply only if it improves holdout CCC. Default off. After face-space calibration, use the FE→DEAM mapping in MATCH.
+  - Note: EmoNet is frozen. Any validation split/k-fold is for the calibration layer only; if improvements are confirmed out-of-sample, refit calibration on 100% of faces-found for deployment.
 - Fusion: Keep the current inverse-variance fusion between scene and face experts. EmoNet serves as the face expert; optional student model can be added later as a distilled replacement or fallback.
 - Licensing: EmoNet is CC BY-NC-ND 4.0. We will not fine-tune or modify the weights. For distribution, prefer loading checkpoints from upstream or a download script with attribution; if vendoring unmodified weights, preserve the original license and attribution and keep the project non-commercial.
+
+POC Evaluation Plan (Ablations)
+
+- Face-only: EmoNet on faces-found subset; report coverage (N/total, %).
+- Scene-only: Scene model on full dataset.
+- Fusion (late): Weighted combination on faces-found subset.
+- Fusion + gating: Fallback to scene-only when no face; report on full dataset. This serves as the headline metric.
+- Metrics: CCC (valence, arousal, mean), plus Pearson r and Spearman ρ for diagnostics. Always state scale conversions used.
+
+Observed Limitations (Aug 25, 2025)
+
+- On FindingEmo, pretrained EmoNet generalizes poorly. Face detection success ≈ 38% (7,453/19,606).
+- Faces-found results (FindingEmo scale): Valence CCC ≈ 0.167, Arousal CCC ≈ 0.016 (mean ≈ 0.092). Pearson/Spearman for arousal are very low.
+- Simple linear calibration (affine in reference space) does not help; best-affine holdout ceiling remains low (Valence ≈ 0.207, Arousal ≈ 0.016), indicating a domain gap not addressable by linear bias/scale fixes.
+- Conclusion: Use EmoNet as a weak, coverage-limited expert for ablations; prioritize fusion + gating for the headline POC metric.
+
+Scale Conversions (for clarity)
+
+- FindingEmo → Reference [-1, 1]: v_ref = v_fe / 3; a_ref = (a_fe − 3) / 3.
+- Reference → FindingEmo: v_fe = 3 · v_ref; a_fe = 3 · a_ref + 3.
 
 ## 3. System Architecture
 

@@ -18,7 +18,10 @@ from utils.emotion_scale_aligner import EmotionScaleAligner
 
 
 def load_emonet_predictions(results_dir: Path):
-    """Load EmoNet predictions and ground truth from evaluation results."""
+    """Load EmoNet predictions and ground truth from evaluation results.
+
+    Returns predictions and targets in reference space [-1, 1].
+    """
     pred_file = results_dir / "per_image_preds.csv"
     if not pred_file.exists():
         raise FileNotFoundError(f"Predictions file not found: {pred_file}")
@@ -34,25 +37,34 @@ def load_emonet_predictions(results_dir: Path):
         raise ValueError("No face-detected samples found for calibration training")
     
     # Extract predictions and ground truth
-    emonet_preds = face_df[["v_pred", "a_pred"]].values
+    # Prefer reference-space predictions if available; otherwise convert
+    aligner = EmotionScaleAligner()
+    if set(["v_ref_pred", "a_ref_pred"]).issubset(face_df.columns):
+        v_ref_pred = face_df["v_ref_pred"].values
+        a_ref_pred = face_df["a_ref_pred"].values
+    else:
+        # Convert FE-space predictions to reference space
+        v_ref_pred, a_ref_pred = aligner.findingemo_to_reference(
+            face_df["v_pred"].values, face_df["a_pred"].values
+        )
+    emonet_ref_pred = np.stack([v_ref_pred, a_ref_pred], axis=1)
+
     findingemo_gt = face_df[["v_gt", "a_gt"]].values
     
     # Remove any NaN values
-    valid_mask = ~(np.isnan(emonet_preds).any(axis=1) | np.isnan(findingemo_gt).any(axis=1))
-    emonet_preds = emonet_preds[valid_mask]
+    valid_mask = ~(np.isnan(emonet_ref_pred).any(axis=1) | np.isnan(findingemo_gt).any(axis=1))
+    emonet_ref_pred = emonet_ref_pred[valid_mask]
     findingemo_gt = findingemo_gt[valid_mask]
     
-    print(f"Valid samples after NaN removal: {len(emonet_preds)}")
+    print(f"Valid samples after NaN removal: {len(emonet_ref_pred)}")
     
-    # CRITICAL FIX: Convert FindingEmo ground truth to reference space [-1, 1]
-    # so both input and target are in the same scale during calibration training
-    aligner = EmotionScaleAligner()
+    # Convert FindingEmo ground truth to reference space [-1, 1]
     v_ref_gt, a_ref_gt = aligner.findingemo_to_reference(findingemo_gt[:, 0], findingemo_gt[:, 1])
     findingemo_ref = np.stack([v_ref_gt, a_ref_gt], axis=1)
     
-    print(f"Ground truth converted from FindingEmo to reference space [-1, 1]")
+    print(f"Using reference-space inputs and targets for calibration training")
     
-    return emonet_preds, findingemo_ref
+    return emonet_ref_pred, findingemo_ref
 
 
 def train_calibration():
@@ -75,7 +87,8 @@ def train_calibration():
     print(f"Reference GT - Arousal range: [{findingemo_ref[:, 1].min():.3f}, {findingemo_ref[:, 1].max():.3f}]")
     
     # Create calibration model
-    calibration = CrossDomainCalibration(l2_reg=1e-4, use_tanh=True)
+    # Disable tanh clamp to avoid dynamic-range shrinkage during optimization
+    calibration = CrossDomainCalibration(l2_reg=1e-4, use_tanh=False)
     trainer = CalibrationTrainer(calibration, lr=0.01, patience=20)
     
     print("\n=== Training Calibration ===")
