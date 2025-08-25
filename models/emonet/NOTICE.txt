@@ -1,0 +1,5 @@
+This directory vendors third-party code from EmoNet
+(https://github.com/face-analysis/emonet), used under the
+Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
+(CC BY-NC-ND 4.0) license. No modifications have been made to the vendored
+files. See LICENSE.txt for details. Copyright belongs to the original authors.

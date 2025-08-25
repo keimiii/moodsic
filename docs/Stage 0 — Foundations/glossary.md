@@ -29,3 +29,7 @@
 - KD-Tree / k-NN: Data structure and method used for fast nearest-neighbor search over DEAM segment valence–arousal space.
 
 - Fusion (variance-weighted): Combine predictions by weighting each by inverse variance; normalized to produce fused prediction and approximate fused variance.
+
+- Affine Calibration: Cross-domain bias correction using learnable linear transformation `output = scale * input + shift`. Corrects systematic differences between emotion datasets (e.g., EmoNet face predictions vs FindingEmo scene labels) with 4 parameters: scale_v, scale_a, shift_v, shift_a.
+
+- Domain Shift: Systematic biases between emotion recognition contexts (facial expressions vs scene emotions) due to different annotation protocols, human labelers, and semantic gaps between modalities.

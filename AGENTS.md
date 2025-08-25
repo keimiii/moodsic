@@ -6,7 +6,7 @@ Quick shortcuts for common tasks:
 - `$craft`: Generate high-quality conventional commit messages for this session’s changes (do not commit; user reviews first).
   - Behavior:
     - Inspect staged/unstaged changes and summarize what changed and why.
-    - Propose a single commit or multiple commits if the work is logically separable.
+    - Always propose a single commit message combining all changes.
   - Output format (no extra prose; emit only commit message text in code fences):
     - Single commit:
       ```
@@ -23,7 +23,7 @@ Quick shortcuts for common tasks:
       Revert plan:
       - <how to undo safely>
       ```
-    - Multiple commits: output multiple blocks separated by a line with three dashes `---`.
+
   - Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
   - Conventions:
     - Subject ≤ 50 chars, imperative mood; wrap body at ~72 chars.
