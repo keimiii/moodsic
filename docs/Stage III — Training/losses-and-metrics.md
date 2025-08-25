@@ -42,6 +42,23 @@ def _ccc(self, pred, true):
 stability = stabilizer.get_stability_metrics()  # variance and jitter over history
 ```
 
+## Calibration Validation Metrics
+
+- **Ablation Study**: Statistical comparison (paired t-tests) of with/without calibration performance
+- **Parameter Monitoring**: Track learned scale/shift parameters; remove layer if near identity (1,1,0,0)
+- **Generalization Test**: Validate on unseen datasets (EMOTIC, ArtPhoto) to prevent overfitting
+- **Bias Visualization**: Bland-Altman plots showing systematic error reduction
+
+```python
+# Calibration validation workflow
+evaluator = CalibrationEvaluator()
+results = evaluator.ablation_study(predictions, labels, n_runs=5)
+
+for metric in ['ccc_v', 'ccc_a', 'mae_v', 'mae_a']:
+    if results[metric]['significant']:
+        print(f"✓ {metric}: +{results[metric]['improvement']:.3f} (p={results[metric]['p_value']:.3f})")
+```
+
 ## Retrieval-Stage Metrics
 
 - Segment-level emotional distance between query and retrieved segments.
