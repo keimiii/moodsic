@@ -9,7 +9,7 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 
 ## Policy
 
-- k-NN over KD-Tree using stabilized V-A as query (after FE→DEAM scaling).
+- k-NN over KD-Tree using stabilized V-A as query (after FE→DEAM static [1, 9] scaling).
 - Choose the nearest candidate not in recent memory; allow repeat if all blocked.
 - Only switch when minimum dwell time has elapsed.
 

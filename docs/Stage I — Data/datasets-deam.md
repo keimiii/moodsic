@@ -14,6 +14,10 @@
 - Example input file referenced: `annotations_dynamic.csv`.
 - Sampling rate used in processing: `2 Hz`.
 
+## Static Annotations
+- Both valence and arousal on a nine-point scale `[1, 9]` (whole 45s excerpt).
+- For this academic POC, we use static annotations `[1, 9]` for retrieval.
+
 ## Segmentation Policy
 - Segment length: `10 seconds`.
 - Overlap: `50%`.
@@ -23,5 +27,5 @@
 - Build KD-Tree over `[valence, arousal]` for fast k-NN.
 
 ## FE→DEAM Scaling (for queries)
-- Valence: `v_deam = (10/3) * v_fe`
-- Arousal: `a_deam = -10 + (20/6) * a_fe`
+- Valence: `v_deam = 1 + (8/6) * (v_fe + 3)`
+- Arousal: `a_deam = 1 + (8/6) * a_fe`

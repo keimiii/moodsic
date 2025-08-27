@@ -18,7 +18,8 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
 - Uncertainty (optional, recommended)
   - Test‑time augmentation (horizontal flip; minor crop/scale jitter) for N passes; return mean and per‑dimension variance for V and A.
 - Calibration
-  - Apply per‑dimension affine map to convert EmoNet outputs → FindingEmo ranges so downstream FE→DEAM scaling works identically.
+  - Apply learned CrossDomainCalibration layer to correct face→scene domain bias.
+  - Convert EmoNet outputs → FindingEmo-aligned space for downstream FE→DEAM scaling.
 - Output contract
   - `(valence_fe: float, arousal_fe: float, variance: tuple[float, float])`
 
@@ -37,7 +38,12 @@ class EmoNetAdapter:
                  n_classes: int = 8,
                  device: str = "auto",
                  tta: int = 5,
-                 calibration_path: str | None = None):
+                 calibration_checkpoint: str | None = None):
+        # Load trained CrossDomainCalibration layer
+        from models.calibration import CrossDomainCalibration
+        self.calibration = CrossDomainCalibration() if calibration_checkpoint else None
+        if calibration_checkpoint:
+            self.calibration.load_state_dict(torch.load(calibration_checkpoint))
         ...
 
     def predict(self, face_bgr: np.ndarray) -> tuple[float, float, tuple[float, float]]:
@@ -55,11 +61,13 @@ class EmoNetAdapter:
 - MATCH: unchanged; FE→DEAM scaling already implemented.
 
 ## Calibration details
-- Fit an affine per dimension on a small FindingEmo validation set:
-  - `v_fe ≈ a_v * v_emonet + b_v`
-  - `a_fe ≈ a_a * a_emonet + b_a`
-- Save to JSON (e.g., `models/emonet/calibration.json`) and have the adapter load and apply it.
-- Clamp outputs to FE ranges (`v∈[-3,3]`, `a∈[0,6]`).
+- Uses trained CrossDomainCalibration PyTorch module for learnable domain bias correction
+- Training: 4-parameter affine transform learned on FindingEmo validation subset
+  - `v_out = scale_v * v_in + shift_v`
+  - `a_out = scale_a * a_in + shift_a`
+- Load from checkpoint: `models/calibration/cross_domain_emonet_to_findingemo.pth`
+- Statistical validation ensures calibration improves performance before deployment
+- Outputs aligned to FindingEmo ranges for downstream FE→DEAM scaling
 
 ## Dependencies
 - `face-alignment` (alignment)

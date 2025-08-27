@@ -31,14 +31,32 @@ class PhaseTrainer:
         return learn
 ```
 
-## Phase 1 — EmoNet Integration (no face training)
+## Phase 1 — EmoNet Integration + Domain Calibration
 
 - Use EmoNet as a fixed face expert via the adapter (alignment, normalization, calibration).
+- **NEW**: Train CrossDomainCalibration layer to correct face→scene domain shift.
 - Validate calibration parameters on a small FE validation split; clamp outputs to FE ranges.
 - Provide TTA-based uncertainty (e.g., tta=5) for fusion and gating.
 
-```text
-No training in this phase. Ensure models/emonet/ is set up; load checkpoints from models/emonet/pretrained/ and calibration from models/emonet/calibration.json.
+```python
+# Train domain calibration (optional)
+from models.calibration import CrossDomainCalibration, CalibrationTrainer
+
+calibration = CrossDomainCalibration(l2_reg=1e-4)
+trainer = CalibrationTrainer(calibration)
+
+# Use subset of FindingEmo with EmoNet predictions + ground truth
+trainer.fit(emonet_predictions, findingemo_labels, val_split=0.2)
+
+# Run ablation study to validate effectiveness
+evaluator = CalibrationEvaluator()
+results = evaluator.ablation_study(emonet_predictions, findingemo_labels, n_runs=5)
+
+# Only keep calibration if statistically significant improvement
+if results['ccc_avg']['significant']:
+    print("✓ Calibration improves performance")
+else:
+    print("✗ No significant improvement - use without calibration")
 ```
 
 ## Phase 2 — Fusion Optimization

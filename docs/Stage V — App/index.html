@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Scene Valence-Arousal Clustering</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        /* Left Panel - Video Selection */
+        .video-panel {
+            flex: 0 0 40%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .video-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-info {
+            margin-top: 1rem;
+        }
+
+        .video-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .model-breakdown {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .model-component {
+            display: flex;
+            align-items: center;
+            margin: 0.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .model-component.ensemble {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+
+        .model-label {
+            color: rgba(255, 255, 255, 0.6);
+            margin-right: 0.5rem;
+            min-width: 100px;
+        }
+
+        .model-value {
+            color: #ffffff;
+            font-size: 1.1rem;
+        }
+
+        .ensemble .model-value {
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .video-description {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0.75rem 2rem;
+            margin: 0 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .scene-indicator {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Right Panel - Visualization */
+        .viz-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .viz-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            flex: 1;
+            position: relative;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+        }
+
+        .axis-labels {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .x-label {
+            bottom: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .y-label {
+            top: 50%;
+            left: 5px;
+            transform: rotate(-90deg) translateX(-50%);
+            transform-origin: left center;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1rem;
+        }
+
+        /* Viz heading */
+        .viz-heading {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            letter-spacing: 0.3px;
+        }
+
+        /* Radio station UI */
+        .radio-container {
+            margin-top: 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 1rem 1.25rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .radio-main {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .album-art {
+            width: 56px;
+            height: 56px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+            flex-shrink: 0;
+        }
+
+        .track-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+            min-width: 0;
+        }
+
+        .track-title {
+            font-weight: 600;
+            font-size: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-artist {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.75);
+        }
+
+        .station {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .equalizer {
+            margin-left: auto;
+            display: flex;
+            gap: 4px;
+            align-items: flex-end;
+            height: 16px;
+        }
+
+        .bar {
+            width: 3px;
+            background: #a5b4fc;
+            opacity: 0.9;
+            animation: bounce 1s infinite ease-in-out;
+        }
+        .bar:nth-child(2) { animation-delay: .15s; }
+        .bar:nth-child(3) { animation-delay: .3s; }
+
+        @keyframes bounce {
+            0%, 100% { height: 2px; }
+            50% { height: 16px; }
+        }
+
+        .progress {
+            margin-top: 0.75rem;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #667eea, #a78bfa);
+            box-shadow: 0 0 12px rgba(167, 139, 250, 0.6);
+            border-radius: inherit;
+        }
+
+        .timecodes {
+            margin-top: 0.25rem;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Pulse animation for canvas points */
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-panel">
+            <div class="header">
+                <h1>Scene Analyzer</h1>
+                <p class="subtitle">Face + Scene Ensemble Model</p>
+            </div>
+            
+            <div class="controls">
+                <button onclick="previousScene()">← Previous</button>
+                <div class="scene-indicator">
+                    Scene <span id="sceneNumber">1</span> of 5
+                </div>
+                <button onclick="nextScene()">Next →</button>
+            </div>
+            
+            <div style="height: 20px;"></div>
+            
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <div class="video-placeholder" id="videoPlaceholder">
+                        <span id="videoText">Action Scene</span>
+                    </div>
+                    <video id="videoPlayer" style="display: none;" loop muted autoplay>
+                        <source src="" type="video/mp4">
+                    </video>
+                </div>
+                <div class="video-info">
+                    <div class="video-title" id="videoTitle">High Arousal Action</div>
+                    <div class="model-breakdown">
+                        <div class="model-component">
+                            <span class="model-label">Face Model:</span>
+                            <span class="model-value" id="faceModel">😢 Crying</span>
+                        </div>
+                        <div class="model-component">
+                            <span class="model-label">Scene Model:</span>
+                            <span class="model-value" id="sceneModel">💒 Wedding</span>
+                        </div>
+                        <div class="model-component ensemble">
+                            <span class="model-label">→ Ensemble Result:</span>
+                            <span class="model-value" id="ensembleResult">😊 Tears of Joy</span>
+                        </div>
+                    </div>
+                    <div class="video-description" id="videoDescription">
+                        Fast-paced action sequence with high energy and moderate positive valence. 
+                        Maps primarily to high arousal clusters.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="viz-panel">
+            <div class="viz-container">
+                <div class="viz-heading">DEAM dataset: Clusters</div>
+                <canvas id="canvas"></canvas>
+                <div class="axis-labels x-label">Valence (Negative ← → Positive)</div>
+                <div class="axis-labels y-label">Arousal (Calm ← → Excited)</div>
+            </div>
+            <div class="radio-container">
+                <div class="radio-main">
+                    <div class="album-art" id="albumArt"></div>
+                    <div class="track-info">
+                        <div class="track-title" id="trackTitle">Sunlit Avenues</div>
+                        <div class="track-artist" id="trackArtist">Ivory Coast</div>
+                        <div class="station">Station: Scene → DEAM Match</div>
+                    </div>
+                    <div class="equalizer" aria-hidden="true">
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+                </div>
+                <div class="progress">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="timecodes">
+                    <span id="elapsed">0:00</span>
+                    <span id="duration">3:20</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Scene definitions with their cluster mappings
+        const scenes = [
+            {
+                title: "Wedding Tears of Joy",
+                description: "Face Model: Crying (negative) | Scene Model: Wedding ceremony (positive) → Ensemble: Joy & High Arousal",
+                placeholder: "Wedding Scene",
+                color: "#ff6ba5",
+                faceEmotion: "😢 Crying",
+                sceneContext: "💒 Wedding",
+                ensembleResult: "😊 Tears of Joy",
+                // Probability of activation for each cluster (0-1)
+                clusterActivation: [0.9, 0.7, 0.1, 0.1, 0.2]
+            },
+            {
+                title: "Roller Coaster Thrill",
+                description: "Face Model: Screaming fear | Scene Model: Amusement park → Ensemble: Excitement & Thrill",
+                placeholder: "Roller Coaster",
+                color: "#ff6b6b",
+                faceEmotion: "😱 Screaming",
+                sceneContext: "🎢 Theme Park",
+                ensembleResult: "🤩 Thrilled",
+                clusterActivation: [0.8, 0.2, 0.3, 0.1, 0.3]
+            },
+            {
+                title: "Graduation Pride",
+                description: "Face Model: Serious/Neutral | Scene Model: Graduation ceremony → Ensemble: Pride & Achievement",
+                placeholder: "Graduation",
+                color: "#4ecdc4",
+                faceEmotion: "😐 Serious",
+                sceneContext: "🎓 Graduation",
+                ensembleResult: "🥹 Proud",
+                clusterActivation: [0.7, 0.8, 0.1, 0.1, 0.3]
+            },
+            {
+                title: "Sports Intensity",
+                description: "Face Model: Angry expression | Scene Model: Basketball game → Ensemble: Competitive Focus",
+                placeholder: "Sports Game",
+                color: "#ffd93d",
+                faceEmotion: "😠 Angry",
+                sceneContext: "🏀 Competition",
+                ensembleResult: "💪 Determined",
+                clusterActivation: [0.6, 0.1, 0.7, 0.2, 0.4]
+            },
+            {
+                title: "Horror Movie Fun",
+                description: "Face Model: Fear/Surprise | Scene Model: Living room, popcorn, friends → Ensemble: Entertainment & Suspense",
+                placeholder: "Movie Night",
+                color: "#a8e6cf",
+                faceEmotion: "😨 Frightened",
+                sceneContext: "🍿 Movie Night",
+                ensembleResult: "😄 Entertained",
+                clusterActivation: [0.7, 0.3, 0.4, 0.1, 0.5]
+            }
+        ];
+
+        const sceneSongs = [
+            { title: 'Sunlit Avenues', artist: 'Ivory Coast', durationSec: 200 },
+            { title: 'Gravity Rush', artist: 'Midnight Circuit', durationSec: 178 },
+            { title: 'Caps & Gowns', artist: 'Riverfolk', durationSec: 191 },
+            { title: 'Full Court Press', artist: 'Baseline', durationSec: 167 },
+            { title: 'Couch Screams', artist: 'Neon Noir', durationSec: 182 }
+        ];
+
+        let currentSceneIndex = 0;
+        let canvas, ctx;
+        let clusters = [];
+        let animationFrame;
+        let particles = [];
+
+        // Radio player state
+        let songTimer = null;
+        let songStart = 0;
+        let songDuration = 0;
+
+        function formatTime(sec) {
+            const t = Math.floor(sec);
+            const m = Math.floor(t / 60);
+            const s = (t % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function startSong() {
+            stopSong();
+
+            const scene = scenes[currentSceneIndex];
+            const song = sceneSongs[currentSceneIndex];
+            const album = document.getElementById('albumArt');
+            const title = document.getElementById('trackTitle');
+            const artist = document.getElementById('trackArtist');
+            const elapsedEl = document.getElementById('elapsed');
+            const durationEl = document.getElementById('duration');
+            const fill = document.getElementById('progressFill');
+
+            title.textContent = song.title;
+            artist.textContent = song.artist;
+            durationEl.textContent = formatTime(song.durationSec);
+            elapsedEl.textContent = '0:00';
+            fill.style.width = '0%';
+            album.style.background = `linear-gradient(135deg, ${scene.color} 0%, #764ba2 100%)`;
+
+            songDuration = song.durationSec;
+            songStart = Date.now();
+
+            songTimer = setInterval(() => {
+                const elapsed = ((Date.now() - songStart) / 1000) % songDuration;
+                elapsedEl.textContent = formatTime(elapsed);
+                fill.style.width = `${(elapsed / songDuration) * 100}%`;
+            }, 200);
+        }
+
+        function stopSong() {
+            if (songTimer) {
+                clearInterval(songTimer);
+                songTimer = null;
+            }
+        }
+
+        // Initialize canvas and generate clusters
+        function init() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            generateClusters();
+            updateScene();
+            animate();
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth - 48; // Account for padding
+            canvas.height = container.clientHeight - 48;
+        }
+
+        // Generate 5 noisy clusters in valence-arousal space
+        function generateClusters() {
+            const clusterConfigs = [
+                { cx: 0.7, cy: 0.7, label: "Exciting & Positive" },  // High arousal, positive valence
+                { cx: 0.7, cy: 0.3, label: "Calm & Positive" },      // Low arousal, positive valence
+                { cx: 0.3, cy: 0.7, label: "Exciting & Negative" },  // High arousal, negative valence
+                { cx: 0.3, cy: 0.3, label: "Calm & Negative" },      // Low arousal, negative valence
+                { cx: 0.5, cy: 0.5, label: "Neutral" }               // Center cluster
+            ];
+            
+            clusters = clusterConfigs.map((config, i) => {
+                const points = [];
+                const numPoints = 80 + Math.random() * 40; // 80-120 points per cluster
+                
+                for (let j = 0; j < numPoints; j++) {
+                    // Generate points with Gaussian distribution around cluster center
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = gaussianRandom() * 0.12; // Cluster spread
+                    
+                    const x = config.cx + Math.cos(angle) * radius;
+                    const y = config.cy + Math.sin(angle) * radius;
+                    
+                    // Add some noise for realism
+                    const noise = 0.02;
+                    const nx = x + (Math.random() - 0.5) * noise;
+                    const ny = y + (Math.random() - 0.5) * noise;
+                    
+                    points.push({
+                        x: Math.max(0.05, Math.min(0.95, nx)),
+                        y: Math.max(0.05, Math.min(0.95, ny)),
+                        activation: 0,
+                        targetActivation: 0,
+                        baseSize: 2 + Math.random() * 2,
+                        pulsePhase: Math.random() * Math.PI * 2
+                    });
+                }
+                
+                return {
+                    id: i,
+                    label: config.label,
+                    points: points,
+                    centerX: config.cx,
+                    centerY: config.cy
+                };
+            });
+        }
+
+        // Gaussian random number generator
+        function gaussianRandom() {
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random();
+            while(v === 0) v = Math.random();
+            return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * 0.5 + 0.5;
+        }
+
+        function updateScene() {
+            const scene = scenes[currentSceneIndex];
+            
+            // Update UI
+            document.getElementById('videoText').textContent = scene.placeholder;
+            document.getElementById('videoTitle').textContent = scene.title;
+            document.getElementById('videoDescription').textContent = scene.description;
+            document.getElementById('sceneNumber').textContent = currentSceneIndex + 1;
+            document.getElementById('videoPlaceholder').style.background = 
+                `linear-gradient(135deg, ${scene.color} 0%, #764ba2 100%)`;
+            
+            // Update model breakdown
+            document.getElementById('faceModel').textContent = scene.faceEmotion;
+            document.getElementById('sceneModel').textContent = scene.sceneContext;
+            document.getElementById('ensembleResult').textContent = scene.ensembleResult;
+            
+            // Update cluster activations
+            clusters.forEach((cluster, i) => {
+                const activation = scene.clusterActivation[i];
+                cluster.points.forEach(point => {
+                    // Add some randomness to individual point activation
+                    const variance = 0.3;
+                    const pointActivation = Math.max(0, Math.min(1, 
+                        activation + (Math.random() - 0.5) * variance
+                    ));
+                    point.targetActivation = pointActivation;
+                });
+            });
+            
+            // Update radio station song for this scene
+            startSong();
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(15, 15, 35, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let i = 0; i <= 10; i++) {
+                const x = (canvas.width / 10) * i;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let i = 0; i <= 10; i++) {
+                const y = (canvas.height / 10) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // Draw clusters
+            clusters.forEach(cluster => {
+                cluster.points.forEach(point => {
+                    // Smooth activation transition
+                    point.activation += (point.targetActivation - point.activation) * 0.1;
+                    
+                    const x = point.x * canvas.width;
+                    const y = (1 - point.y) * canvas.height; // Invert Y for proper orientation
+                    
+                    // Calculate size with pulsing effect
+                    const pulseAmount = Math.sin(Date.now() * 0.003 + point.pulsePhase) * 0.5 + 0.5;
+                    const size = point.baseSize + point.activation * pulseAmount * 8;
+                    
+                    // Calculate glow intensity
+                    const glowIntensity = point.activation;
+                    
+                    if (glowIntensity > 0.1) {
+                        // Draw glow
+                        const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
+                        gradient.addColorStop(0, `rgba(100, 126, 234, ${glowIntensity * 0.8})`);
+                        gradient.addColorStop(0.3, `rgba(118, 75, 162, ${glowIntensity * 0.4})`);
+                        gradient.addColorStop(1, 'rgba(118, 75, 162, 0)');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    // Draw point
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + glowIntensity * 0.6})`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Add bright core for active points
+                    if (glowIntensity > 0.3) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${glowIntensity})`;
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+            });
+            
+            animationFrame = requestAnimationFrame(animate);
+        }
+
+        function nextScene() {
+            currentSceneIndex = (currentSceneIndex + 1) % scenes.length;
+            updateScene();
+        }
+
+        function previousScene() {
+            currentSceneIndex = (currentSceneIndex - 1 + scenes.length) % scenes.length;
+            updateScene();
+        }
+
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

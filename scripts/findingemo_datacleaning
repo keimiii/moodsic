@@ -1,0 +1,967 @@
+import os
+import json
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import matplotlib.pyplot as plt
+import seaborn as sns
+from PIL import Image, ImageFile
+import cv2
+from collections import defaultdict, Counter
+import hashlib
+import shutil
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
+
+# Allow loading of truncated images
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+class DatasetCleaner:
+    def __init__(self, data_path="data", output_dir="cleaned_data"):
+        self.data_path = Path(data_path)
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        
+        # Initialize tracking dictionaries
+        self.file_stats = {}
+        self.corrupted_files = []
+        self.true_duplicates = []  # Same folder + filename
+        self.cross_run_identical = []  # Same content across runs (expected)
+        self.within_folder_duplicates = []  # Same content within same folder (problematic)
+        self.small_files = []
+        self.large_files = []
+        self.unsupported_formats = []
+        self.image_issues = []
+        self.size_stats = defaultdict(list)
+        self.format_stats = defaultdict(int)
+        
+        # For tracking duplicate flags per file
+        self.true_duplicate_files = set()  # Files that are true duplicates
+        
+        # Configuration
+        self.min_file_size = 20 * 1024  # 20 KB minimum
+        self.max_file_size = 50 * 1024 * 1024  # 50MB maximum
+        self.min_image_resolution = (32, 32)  # Minimum width, height
+        self.max_image_resolution = (8192, 8192)  # Maximum width, height
+        self.supported_formats = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+        
+    def scan_all_files(self):
+        """Comprehensive scan of all files in the dataset"""
+        print("🔍 Starting comprehensive file scan...")
+        
+        total_files = 0
+        total_size = 0
+        processed_files = 0
+        
+        # Get total file count for progress
+        all_files = list(self.data_path.rglob('*'))
+        total_to_process = len([f for f in all_files if f.is_file()])
+        
+        for file_path in self.data_path.rglob('*'):
+            if file_path.is_file():
+                processed_files += 1
+                if processed_files % 100 == 0:
+                    print(f"  Processing file {processed_files}/{total_to_process}...")
+                
+                file_info = self.analyze_single_file(file_path)
+                if file_info:
+                    self.file_stats[str(file_path)] = file_info
+                    total_files += 1
+                    total_size += file_info['size_bytes']
+        
+        print(f"✅ Scan complete: {total_files} files analyzed")
+        print(f"📊 Total dataset size: {self.format_bytes(total_size)}")
+        
+        return total_files, total_size
+    
+    def analyze_single_file(self, file_path):
+        """Analyze a single file for various issues"""
+        try:
+            # Basic file info - GET SIZE FIRST
+            stat = file_path.stat()
+            file_size = stat.st_size
+            
+            # Parse the path structure for your specific case
+            relative_path = file_path.relative_to(self.data_path)
+            path_parts = relative_path.parts
+            
+            # Extract run, folder, filename info
+            run_folder = path_parts[0] if len(path_parts) > 0 else "unknown"
+            desc_folder = path_parts[1] if len(path_parts) > 1 else "unknown"
+            filename = file_path.name
+            
+            # Initialize file info with flags
+            file_info = {
+                'path': str(file_path),
+                'relative_path': str(relative_path),
+                'filename': filename,
+                'run_folder': run_folder,
+                'desc_folder': desc_folder,
+                'folder_filename_key': f"{desc_folder}/{filename}",  # Key for duplicate detection
+                'extension': file_path.suffix.lower(),
+                'size_bytes': file_size,
+                'size_mb': file_size / (1024 * 1024),
+                'modified_time': datetime.fromtimestamp(stat.st_mtime),
+                'is_image': file_path.suffix.lower() in self.supported_formats,
+                'is_corrupted': False,
+                'is_too_small': file_size < self.min_file_size,
+                'is_too_large': file_size > self.max_file_size,
+                'true_duplicate': False,  # Will be set during duplicate detection
+                'issues': []
+            }
+            
+            # File size checks and tracking
+            if file_info['is_too_small']:
+                file_info['issues'].append('too_small')
+                self.small_files.append(file_info)
+            
+            if file_info['is_too_large']:
+                file_info['issues'].append('too_large')
+                self.large_files.append(file_info)
+            
+            # Format checks
+            if file_info['is_image']:
+                self.format_stats[file_info['extension']] += 1
+                self.size_stats['image_sizes'].append(file_info['size_bytes'])
+                
+                # Deep image analysis
+                image_issues = self.analyze_image_file(file_path)
+                file_info.update(image_issues)
+                
+            else:
+                # Non-image file
+                if file_path.suffix.lower() not in {'.csv', '.json', '.txt', '.md'}:
+                    file_info['issues'].append('unsupported_format')
+                    self.unsupported_formats.append(file_info)
+                
+                self.size_stats['non_image_sizes'].append(file_info['size_bytes'])
+            
+            # Calculate file hash for duplicate detection (only if not too small to avoid errors)
+            if not file_info['is_too_small']:
+                file_info['hash'] = self.calculate_file_hash(file_path)
+            else:
+                file_info['hash'] = None
+            
+            return file_info
+            
+        except Exception as e:
+            # Try to get basic info even for corrupted files
+            try:
+                file_size = file_path.stat().st_size
+                filename = file_path.name
+                relative_path = file_path.relative_to(self.data_path)
+                path_parts = relative_path.parts
+                run_folder = path_parts[0] if len(path_parts) > 0 else "unknown"
+                desc_folder = path_parts[1] if len(path_parts) > 1 else "unknown"
+                
+                corrupted_info = {
+                    'path': str(file_path),
+                    'relative_path': str(relative_path),
+                    'filename': filename,
+                    'run_folder': run_folder,
+                    'desc_folder': desc_folder,
+                    'folder_filename_key': f"{desc_folder}/{filename}",
+                    'extension': file_path.suffix.lower(),
+                    'size_bytes': file_size,
+                    'size_mb': file_size / (1024 * 1024),
+                    'modified_time': None,
+                    'is_image': file_path.suffix.lower() in self.supported_formats,
+                    'is_corrupted': True,
+                    'is_too_small': file_size < self.min_file_size,
+                    'is_too_large': file_size > self.max_file_size,
+                    'true_duplicate': False,
+                    'width': None,
+                    'height': None,
+                    'hash': None,
+                    'issues': ['corrupted_or_inaccessible'],
+                    'error': str(e)
+                }
+                
+                self.corrupted_files.append(corrupted_info)
+                return corrupted_info
+                
+            except:
+                # Completely inaccessible file
+                corrupted_info = {
+                    'path': str(file_path),
+                    'error': str(e),
+                    'issues': ['corrupted_or_inaccessible'],
+                    'is_corrupted': True,
+                    'is_image': False,
+                    'is_too_small': False,
+                    'is_too_large': False,
+                    'true_duplicate': False
+                }
+                self.corrupted_files.append(corrupted_info)
+                return None
+    
+    def analyze_image_file(self, file_path):
+        """Deep analysis of image files"""
+        image_info = {
+            'width': None,
+            'height': None,
+            'channels': None,
+            'mode': None,
+            'can_open_pil': False,
+            'can_open_cv2': False
+        }
+        
+        # Try opening with PIL
+        try:
+            with Image.open(file_path) as img:
+                image_info.update({
+                    'width': img.width,
+                    'height': img.height,
+                    'mode': img.mode,
+                    'can_open_pil': True
+                })
+                
+                # Check resolution constraints
+                if (img.width < self.min_image_resolution[0] or 
+                    img.height < self.min_image_resolution[1]):
+                    image_info['issues'] = image_info.get('issues', []) + ['resolution_too_low']
+                
+                if (img.width > self.max_image_resolution[0] or 
+                    img.height > self.max_image_resolution[1]):
+                    image_info['issues'] = image_info.get('issues', []) + ['resolution_too_high']
+                
+                # Check for unusual aspect ratios
+                aspect_ratio = img.width / img.height
+                if aspect_ratio > 10 or aspect_ratio < 0.1:
+                    image_info['issues'] = image_info.get('issues', []) + ['unusual_aspect_ratio']
+                
+        except Exception as e:
+            image_info['pil_error'] = str(e)
+            image_info['issues'] = image_info.get('issues', []) + ['pil_open_failed']
+        
+        # Try opening with OpenCV
+        try:
+            img_cv = cv2.imread(str(file_path))
+            if img_cv is not None:
+                image_info['can_open_cv2'] = True
+                if image_info['channels'] is None:
+                    image_info['channels'] = img_cv.shape[2] if len(img_cv.shape) == 3 else 1
+            else:
+                image_info['issues'] = image_info.get('issues', []) + ['cv2_open_failed']
+        except Exception as e:
+            image_info['cv2_error'] = str(e)
+            image_info['issues'] = image_info.get('issues', []) + ['cv2_open_failed']
+        
+        # Mark as corrupted if neither can open it
+        if not image_info['can_open_pil'] and not image_info['can_open_cv2']:
+            image_info['is_corrupted'] = True
+            image_info['issues'] = image_info.get('issues', []) + ['image_corrupted']
+        
+        return image_info
+    
+    def calculate_file_hash(self, file_path):
+        """Calculate MD5 hash for duplicate detection"""
+        try:
+            hash_md5 = hashlib.md5()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hash_md5.update(chunk)
+            return hash_md5.hexdigest()
+        except:
+            return None
+    
+    def find_duplicates_smart(self):
+        """Smart duplicate detection that understands your folder structure"""
+        print("🔍 Analyzing duplicates with context awareness...")
+        
+        # Group files by different criteria
+        hash_to_files = defaultdict(list)
+        folder_filename_to_files = defaultdict(list)
+        
+        total_files = len([f for f in self.file_stats.values() if f['is_image']])
+        processed = 0
+        
+        for file_path, file_info in self.file_stats.items():
+            if file_info.get('hash') and file_info['is_image']:
+                processed += 1
+                if processed % 1000 == 0:
+                    print(f"  Processing {processed}/{total_files} image files...")
+                    
+                hash_to_files[file_info['hash']].append(file_info)
+                
+                # Group by folder+filename (your duplicate definition)
+                key = file_info['folder_filename_key']
+                folder_filename_to_files[key].append(file_info)
+        
+        # 1. TRUE DUPLICATES: Same folder + filename combination
+        print("  🔍 Finding true duplicates (same folder/filename)...")
+        for key, file_list in folder_filename_to_files.items():
+            if len(file_list) > 1:
+                self.true_duplicates.append({
+                    'folder_filename': key,
+                    'files': file_list,
+                    'count': len(file_list),
+                    'size_bytes': file_list[0]['size_bytes'],
+                    'runs': [f['run_folder'] for f in file_list]
+                })
+                
+                # Mark files as true duplicates (keep first, mark rest as duplicates)
+                for i, file_info in enumerate(file_list):
+                    if i > 0:  # Not the first (original) file
+                        self.true_duplicate_files.add(file_info['path'])
+                        # Update the file_stats entry
+                        self.file_stats[file_info['path']]['true_duplicate'] = True
+        
+        # 2. CROSS-RUN IDENTICAL: Same content across different runs (expected)
+        print("  🔍 Finding cross-run identical files (expected behavior)...")
+        for file_hash, file_list in hash_to_files.items():
+            if len(file_list) > 1:
+                # Group by run
+                by_run = defaultdict(list)
+                for file_info in file_list:
+                    by_run[file_info['run_folder']].append(file_info)
+                
+                if len(by_run) > 1:  # Appears in multiple runs
+                    # Check if it's the same folder+filename across runs
+                    folder_filenames = set(f['folder_filename_key'] for f in file_list)
+                    if len(folder_filenames) == 1:  # Same folder/filename, different runs
+                        self.cross_run_identical.append({
+                            'hash': file_hash,
+                            'folder_filename': list(folder_filenames)[0],
+                            'files': file_list,
+                            'runs': list(by_run.keys()),
+                            'count': len(file_list),
+                            'size_bytes': file_list[0]['size_bytes']
+                        })
+        
+        # 3. WITHIN-FOLDER DUPLICATES: Same content, different filenames, same folder
+        print("  🔍 Finding within-folder duplicates (same content, different names)...")
+        for file_hash, file_list in hash_to_files.items():
+            if len(file_list) > 1:
+                # Group by exact folder within same run
+                by_exact_folder = defaultdict(list)
+                for file_info in file_list:
+                    folder_key = f"{file_info['run_folder']}/{file_info['desc_folder']}"
+                    by_exact_folder[folder_key].append(file_info)
+                
+                for folder_key, folder_files in by_exact_folder.items():
+                    if len(folder_files) > 1:
+                        # Check if they have different filenames but same content
+                        filenames = [f['filename'] for f in folder_files]
+                        unique_filenames = set(filenames)
+                        
+                        if len(unique_filenames) > 1:  # Different filenames
+                            # Verify they actually have the same hash (identical content)
+                            file_hashes = set(f.get('hash') for f in folder_files)
+                            if len(file_hashes) == 1 and None not in file_hashes:  # Same hash
+                                # Additional verification: check file sizes
+                                file_sizes = set(f['size_bytes'] for f in folder_files)
+                                if len(file_sizes) == 1:  # Same size
+                                    self.within_folder_duplicates.append({
+                                        'hash': file_hash,
+                                        'folder_path': folder_key,
+                                        'files': folder_files,
+                                        'filenames': list(unique_filenames),
+                                        'count': len(folder_files),
+                                        'size_bytes': folder_files[0]['size_bytes']
+                                    })
+        
+        # Summary
+        total_true_duplicates = sum(dup['count'] - 1 for dup in self.true_duplicates)
+        total_cross_run = len(self.cross_run_identical)
+        total_within_folder = sum(dup['count'] - 1 for dup in self.within_folder_duplicates)
+        
+        print(f"\n📊 DUPLICATE ANALYSIS RESULTS:")
+        print(f"  True Duplicates (same folder/filename): {len(self.true_duplicates)} groups, {total_true_duplicates} extra files")
+        print(f"  Cross-Run Identical (expected): {total_cross_run} folder/filename pairs")
+        print(f"  Within-Folder Duplicates (verified identical content): {len(self.within_folder_duplicates)} groups, {total_within_folder} extra files")
+        
+        return self.true_duplicates, self.cross_run_identical, self.within_folder_duplicates
+    
+    def analyze_dataset_balance(self):
+        """Analyze balance across runs and folders"""
+        print("\n📊 DATASET BALANCE ANALYSIS:")
+        
+        # Count by run
+        run_counts = defaultdict(int)
+        folder_run_counts = defaultdict(lambda: defaultdict(int))
+        
+        for file_info in self.file_stats.values():
+            if file_info['is_image']:
+                run_counts[file_info['run_folder']] += 1
+                folder_run_counts[file_info['desc_folder']][file_info['run_folder']] += 1
+        
+        print(f"\nImages per run:")
+        for run, count in sorted(run_counts.items()):
+            print(f"  {run}: {count:,} images")
+        
+        # Folders that appear in both runs
+        folders_in_both = []
+        folders_in_one = []
+        
+        for folder, runs in folder_run_counts.items():
+            if len(runs) > 1:
+                folders_in_both.append((folder, dict(runs)))
+            else:
+                folders_in_one.append((folder, dict(runs)))
+        
+        print(f"\nFolder distribution:")
+        print(f"  Folders in multiple runs: {len(folders_in_both)}")
+        print(f"  Folders in single run: {len(folders_in_one)}")
+        
+        if folders_in_both:
+            print(f"\nFolders appearing in both runs (top 10):")
+            sorted_both = sorted(folders_in_both, key=lambda x: sum(x[1].values()), reverse=True)
+            for folder, runs in sorted_both[:10]:
+                run_details = ", ".join([f"{run}: {count}" for run, count in runs.items()])
+                print(f"  {folder}: {run_details}")
+        
+        return run_counts, folder_run_counts, folders_in_both, folders_in_one
+    
+    def generate_cleaning_report(self):
+        """Generate comprehensive cleaning report"""
+        print("\n" + "="*70)
+        print("🧹 DATA CLEANING ANALYSIS REPORT")
+        print("="*70)
+        
+        total_files = len(self.file_stats)
+        total_size = sum(info['size_bytes'] for info in self.file_stats.values())
+        
+        # Basic statistics
+        print(f"\n📊 DATASET OVERVIEW:")
+        print(f"  Total Files: {total_files:,}")
+        print(f"  Total Size: {self.format_bytes(total_size)}")
+        print(f"  Average File Size: {self.format_bytes(total_size / total_files if total_files > 0 else 0)}")
+        
+        # Image vs non-image breakdown
+        image_files = sum(1 for info in self.file_stats.values() if info['is_image'])
+        non_image_files = total_files - image_files
+        
+        print(f"\n📁 FILE TYPE BREAKDOWN:")
+        print(f"  Image Files: {image_files:,} ({image_files/total_files*100:.1f}%)")
+        print(f"  Non-Image Files: {non_image_files:,} ({non_image_files/total_files*100:.1f}%)")
+        
+        # Format distribution
+        print(f"\n🖼️  IMAGE FORMAT DISTRIBUTION:")
+        for ext, count in sorted(self.format_stats.items(), key=lambda x: x[1], reverse=True):
+            percentage = count / image_files * 100 if image_files > 0 else 0
+            print(f"  {ext}: {count:,} files ({percentage:.1f}%)")
+        
+        # Size analysis
+        if self.size_stats['image_sizes']:
+            img_sizes = np.array(self.size_stats['image_sizes'])
+            print(f"\n📏 IMAGE SIZE STATISTICS:")
+            print(f"  Min: {self.format_bytes(img_sizes.min())}")
+            print(f"  Max: {self.format_bytes(img_sizes.max())}")
+            print(f"  Mean: {self.format_bytes(img_sizes.mean())}")
+            print(f"  Median: {self.format_bytes(np.median(img_sizes))}")
+        
+        # Issues summary with updated counts
+        corrupted_count = sum(1 for info in self.file_stats.values() if info.get('is_corrupted', False))
+        too_small_count = sum(1 for info in self.file_stats.values() if info.get('is_too_small', False))
+        too_large_count = sum(1 for info in self.file_stats.values() if info.get('is_too_large', False))
+        true_duplicate_count = sum(1 for info in self.file_stats.values() if info.get('true_duplicate', False))
+        
+        print(f"\n⚠️  ISSUES DETECTED:")
+        print(f"  Corrupted Files: {corrupted_count}")
+        print(f"  True Duplicates (problematic): {len(self.true_duplicates)} groups ({true_duplicate_count} files)")
+        print(f"  Cross-Run Identical (expected): {len(self.cross_run_identical)} pairs")
+        print(f"  Within-Folder Duplicates: {len(self.within_folder_duplicates)} groups")
+        print(f"  Files Too Small (<{self.format_bytes(self.min_file_size)}): {too_small_count}")
+        print(f"  Files Too Large (>{self.format_bytes(self.max_file_size)}): {too_large_count}")
+        print(f"  Unsupported Formats: {len(self.unsupported_formats)}")
+        
+        # Resolution analysis for images
+        resolution_issues = 0
+        for file_info in self.file_stats.values():
+            if file_info.get('issues'):
+                if any(issue in file_info['issues'] for issue in ['resolution_too_low', 'resolution_too_high', 'unusual_aspect_ratio']):
+                    resolution_issues += 1
+        
+        print(f"  Resolution Issues: {resolution_issues}")
+        
+        return {
+            'total_files': total_files,
+            'total_size': total_size,
+            'corrupted_files': corrupted_count,
+            'true_duplicates': len(self.true_duplicates),
+            'cross_run_identical': len(self.cross_run_identical),
+            'within_folder_duplicates': len(self.within_folder_duplicates)
+        }
+    
+    def save_detailed_reports(self):
+        """Save detailed reports to files with enhanced columns"""
+        reports_dir = self.output_dir / "cleaning_reports"
+        reports_dir.mkdir(exist_ok=True)
+        
+        # Save corrupted files report
+        corrupted_files_list = [info for info in self.file_stats.values() if info.get('is_corrupted', False)]
+        if corrupted_files_list:
+            corrupted_df = pd.DataFrame(corrupted_files_list)
+            corrupted_df.to_csv(reports_dir / "corrupted_files.csv", index=False)
+            print(f"💾 Corrupted files list saved to: {reports_dir / 'corrupted_files.csv'}")
+        
+        # Save true duplicates report
+        if self.true_duplicates:
+            true_dup_data = []
+            for dup in self.true_duplicates:
+                for i, file_info in enumerate(dup['files']):
+                    true_dup_data.append({
+                        'group_id': dup['folder_filename'],
+                        'file_path': file_info['path'],
+                        'run_folder': file_info['run_folder'],
+                        'desc_folder': file_info['desc_folder'],
+                        'filename': file_info['filename'],
+                        'is_original': i == 0,
+                        'size_bytes': file_info['size_bytes'],
+                        'group_size': dup['count']
+                    })
+            
+            pd.DataFrame(true_dup_data).to_csv(reports_dir / "true_duplicates.csv", index=False)
+            print(f"💾 True duplicates saved to: {reports_dir / 'true_duplicates.csv'}")
+        
+        # Save cross-run identical files report  
+        if self.cross_run_identical:
+            cross_run_data = []
+            for item in self.cross_run_identical:
+                for file_info in item['files']:
+                    cross_run_data.append({
+                        'folder_filename': item['folder_filename'],
+                        'file_path': file_info['path'],
+                        'run_folder': file_info['run_folder'],
+                        'desc_folder': file_info['desc_folder'],
+                        'filename': file_info['filename'],
+                        'hash': item['hash'],
+                        'size_bytes': file_info['size_bytes']
+                    })
+            
+            pd.DataFrame(cross_run_data).to_csv(reports_dir / "cross_run_identical.csv", index=False)
+            print(f"💾 Cross-run identical files saved to: {reports_dir / 'cross_run_identical.csv'}")
+        
+        # Save within-folder duplicates
+        if self.within_folder_duplicates:
+            within_folder_data = []
+            for dup in self.within_folder_duplicates:
+                for i, file_info in enumerate(dup['files']):
+                    within_folder_data.append({
+                        'group_id': dup['hash'],
+                        'folder_path': dup['folder_path'],
+                        'file_path': file_info['path'],
+                        'filename': file_info['filename'],
+                        'is_duplicate': i > 0,
+                        'size_bytes': file_info['size_bytes']
+                    })
+            
+            pd.DataFrame(within_folder_data).to_csv(reports_dir / "within_folder_duplicates.csv", index=False)
+            print(f"💾 Within-folder duplicates saved to: {reports_dir / 'within_folder_duplicates.csv'}")
+        
+        # Save complete file analysis with enhanced boolean columns
+        analysis_data = []
+        for file_path, file_info in self.file_stats.items():
+            analysis_data.append({
+                'file_path': file_path,
+                'run_folder': file_info.get('run_folder', ''),
+                'desc_folder': file_info.get('desc_folder', ''),
+                'filename': file_info['filename'],
+                'size_bytes': file_info['size_bytes'],
+                'size_mb': file_info['size_mb'],
+                'extension': file_info['extension'],
+                'is_image': file_info['is_image'],
+                'corrupted': file_info.get('is_corrupted', False),
+                'is_too_small': file_info.get('is_too_small', False),
+                'is_too_large': file_info.get('is_too_large', False),
+                'true_duplicate': file_info.get('true_duplicate', False),
+                'width': file_info.get('width'),
+                'height': file_info.get('height'),
+                'issues': ','.join(file_info.get('issues', [])),
+                'hash': file_info.get('hash'),
+                'analysis_status': 'success'
+            })
+        
+        analysis_df = pd.DataFrame(analysis_data)
+        analysis_df.to_csv(reports_dir / "complete_file_analysis.csv", index=False)
+        print(f"💾 Complete analysis saved to: {reports_dir / 'complete_file_analysis.csv'}")
+        
+        # Save summary statistics
+        summary = self.generate_cleaning_report()
+        with open(reports_dir / "cleaning_summary.json", 'w') as f:
+            json.dump(summary, f, indent=2, default=str)
+        print(f"💾 Summary statistics saved to: {reports_dir / 'cleaning_summary.json'}")
+        
+        return reports_dir
+    
+    def create_visualizations(self):
+        """Create visualizations of the cleaning analysis"""
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        
+        # File size distribution
+        if self.size_stats['image_sizes']:
+            axes[0, 0].hist(np.array(self.size_stats['image_sizes']) / 1024, bins=50, alpha=0.7)
+            axes[0, 0].set_xlabel('File Size (KB)')
+            axes[0, 0].set_ylabel('Count')
+            axes[0, 0].set_title('Image File Size Distribution')
+            axes[0, 0].set_yscale('log')
+        
+        # Format distribution
+        if self.format_stats:
+            formats, counts = zip(*self.format_stats.items())
+            axes[0, 1].bar(formats, counts)
+            axes[0, 1].set_xlabel('File Format')
+            axes[0, 1].set_ylabel('Count')
+            axes[0, 1].set_title('File Format Distribution')
+            axes[0, 1].tick_params(axis='x', rotation=45)
+        
+        # Updated issues pie chart
+        corrupted_count = sum(1 for info in self.file_stats.values() if info.get('is_corrupted', False))
+        too_small_count = sum(1 for info in self.file_stats.values() if info.get('is_too_small', False))
+        too_large_count = sum(1 for info in self.file_stats.values() if info.get('is_too_large', False))
+        
+        issue_counts = {
+            'Corrupted': corrupted_count,
+            'Too Small': too_small_count,
+            'Too Large': too_large_count,
+            'Unsupported': len(self.unsupported_formats),
+            'True Duplicates': len(self.true_duplicates),
+            'Within-Folder Dups': len(self.within_folder_duplicates)
+        }
+        
+        issue_counts = {k: v for k, v in issue_counts.items() if v > 0}
+        if issue_counts:
+            axes[0, 2].pie(issue_counts.values(), labels=issue_counts.keys(), autopct='%1.1f%%')
+            axes[0, 2].set_title('Distribution of Issues')
+        
+        # Resolution distribution (for images with valid dimensions)
+        resolutions = []
+        for file_info in self.file_stats.values():
+            if file_info.get('width') and file_info.get('height'):
+                resolutions.append(file_info['width'] * file_info['height'])
+        
+        if resolutions:
+            axes[1, 0].hist(resolutions, bins=50, alpha=0.7)
+            axes[1, 0].set_xlabel('Resolution (pixels)')
+            axes[1, 0].set_ylabel('Count')
+            axes[1, 0].set_title('Image Resolution Distribution')
+            axes[1, 0].set_xscale('log')
+        
+        # Duplicate analysis
+        dup_types = ['True Duplicates', 'Cross-Run Identical', 'Within-Folder Dups']
+        dup_counts = [len(self.true_duplicates), len(self.cross_run_identical), len(self.within_folder_duplicates)]
+        colors = ['red', 'orange', 'yellow']
+        
+        axes[1, 1].bar(dup_types, dup_counts, color=colors)
+        axes[1, 1].set_ylabel('Number of Groups')
+        axes[1, 1].set_title('Duplicate Types Analysis')
+        axes[1, 1].tick_params(axis='x', rotation=45)
+        
+        # Run distribution
+        run_counts = defaultdict(int)
+        for file_info in self.file_stats.values():
+            if file_info['is_image']:
+                run_counts[file_info.get('run_folder', 'unknown')] += 1
+        
+        if run_counts:
+            runs, counts = zip(*run_counts.items())
+            axes[1, 2].bar(runs, counts)
+            axes[1, 2].set_xlabel('Run')
+            axes[1, 2].set_ylabel('Image Count')
+            axes[1, 2].set_title('Images per Run')
+        
+        plt.tight_layout()
+        
+        viz_path = self.output_dir / "cleaning_analysis_visualizations.png"
+        plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+        print(f"📊 Visualizations saved to: {viz_path}")
+        plt.show()
+        
+        return viz_path
+    
+    def clean_dataset(self, remove_corrupted=True, remove_true_duplicates=True, 
+                     remove_within_folder_duplicates=True, remove_small=True, 
+                     remove_unsupported=True, dry_run=True):
+        """Clean the dataset by removing problematic files"""
+        
+        print(f"\n🧹 Starting cleaning analysis...")
+        
+        if dry_run:
+            print("🧪 DRY RUN MODE - No files will be actually removed")
+        else:
+            print("🗑️  CLEANING MODE - Files will be permanently removed!")
+            print("Note: Cross-run identical files will be kept (they're expected)")
+            response = input("Are you sure you want to proceed? (yes/no): ")
+            if response.lower() != 'yes':
+                print("Cleaning cancelled.")
+                return
+        
+        files_to_remove = []
+        removal_reasons = []
+        
+        print("📋 Collecting files to remove...")
+        
+        # Collect files based on flags
+        for file_path, file_info in self.file_stats.items():
+            
+            # Check each removal condition
+            if remove_corrupted and file_info.get('is_corrupted', False):
+                files_to_remove.append(file_path)
+                removal_reasons.append('corrupted')
+                
+            elif remove_small and file_info.get('is_too_small', False):
+                files_to_remove.append(file_path)
+                removal_reasons.append('too_small')
+                
+            elif remove_true_duplicates and file_info.get('true_duplicate', False):
+                files_to_remove.append(file_path)
+                removal_reasons.append('true_duplicate')
+                
+            elif remove_unsupported and 'unsupported_format' in file_info.get('issues', []):
+                files_to_remove.append(file_path)
+                removal_reasons.append('unsupported_format')
+        
+        # Add within-folder duplicates
+        if remove_within_folder_duplicates:
+            for dup in self.within_folder_duplicates:
+                # Keep the first file, remove the rest
+                for i, file_info in enumerate(dup['files']):
+                    if i > 0:  # Not the first file
+                        files_to_remove.append(file_info['path'])
+                        removal_reasons.append('within_folder_duplicate')
+        
+        print(f"\n📊 Cleaning Summary:")
+        print(f"  Total files to remove: {len(files_to_remove)}")
+        
+        # Group by reason
+        reason_counts = Counter(removal_reasons)
+        for reason, count in reason_counts.items():
+            print(f"    {reason.replace('_', ' ').title()}: {count}")
+        
+        if not dry_run:
+            print(f"\n🗑️  Removing files...")
+            removed_count = 0
+            removed_size = 0
+            
+            for i, file_path in enumerate(files_to_remove):
+                if i % 100 == 0 and i > 0:
+                    print(f"  Removed {i}/{len(files_to_remove)} files...")
+                try:
+                    file_size = Path(file_path).stat().st_size
+                    Path(file_path).unlink()
+                    removed_count += 1
+                    removed_size += file_size
+                except Exception as e:
+                    print(f"  Error removing {file_path}: {e}")
+            
+            print(f"✅ Successfully removed {removed_count} files")
+            print(f"💾 Space freed: {self.format_bytes(removed_size)}")
+        else:
+            print(f"\n💾 Calculating space that would be freed...")
+            total_size_to_remove = 0
+            for file_path in files_to_remove:
+                try:
+                    total_size_to_remove += Path(file_path).stat().st_size
+                except:
+                    pass
+            
+            print(f"💾 Space that would be freed: {self.format_bytes(total_size_to_remove)}")
+        
+        return files_to_remove, removal_reasons
+    
+    @staticmethod
+    def format_bytes(bytes_size):
+        """Format bytes to human readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if bytes_size < 1024.0:
+                return f"{bytes_size:.1f} {unit}"
+            bytes_size /= 1024.0
+        return f"{bytes_size:.1f} TB"
+
+# Main execution function - NON-INTERACTIVE VERSION
+def clean_dataset_smart(data_path="data", output_dir="cleaned_data", 
+                       auto_run_dry_run=True, auto_clean=False):
+    """Main function to clean the dataset with smart duplicate detection"""
+    
+    cleaner = DatasetCleaner(data_path, output_dir)
+    
+    print("🚀 Starting SMART dataset cleaning...")
+    print("\n📋 CLEANING RULES:")
+    print("=" * 50)
+    print("✅ KEEP (Expected/Normal):")
+    print("  • Cross-run identical files (data/Run1/folder/img.jpg + data/Run2/folder/img.jpg)")
+    print("  • Different content with same names in different folders")
+    print("  • All CSV/JSON annotation files")
+    print("")
+    print("🗑️  REMOVE (Problematic):")
+    print("  • Corrupted files (can't open with PIL or OpenCV)")
+    print("  • Files < 20KB (likely corrupted)")
+    print("  • Files > 50MB (unusually large)")
+    print("  • Unsupported formats (not image/annotation files)")
+    print("  • True duplicates (exact same folder+filename in multiple locations)")
+    print("  • Within-folder duplicates (same content, different names, same folder)")
+    print("  • Resolution issues (too small: <32x32, too large: >8192x8192)")
+    print("=" * 50)
+    
+    # Step 1: Scan all files
+    print("\n🔍 STEP 1: Scanning all files...")
+    total_files, total_size = cleaner.scan_all_files()
+    
+    # Step 2: Smart duplicate detection
+    print("\n🔍 STEP 2: Smart duplicate detection...")
+    cleaner.find_duplicates_smart()
+    
+    # Step 3: Dataset balance analysis
+    print("\n📊 STEP 3: Dataset balance analysis...")
+    cleaner.analyze_dataset_balance()
+    
+    # Step 4: Generate reports
+    print("\n📋 STEP 4: Generating reports...")
+    summary = cleaner.generate_cleaning_report()
+    
+    # Step 5: Save detailed reports
+    print("\n💾 STEP 5: Saving detailed reports...")
+    reports_dir = cleaner.save_detailed_reports()
+    
+    # Step 6: Create visualizations
+    print("\n📊 STEP 6: Creating visualizations...")
+    cleaner.create_visualizations()
+    
+    # Step 7: Show specific examples
+    print(f"\n🔍 DETAILED DUPLICATE ANALYSIS:")
+    print("=" * 50)
+    
+    if cleaner.cross_run_identical:
+        print(f"\n✅ CROSS-RUN IDENTICAL (KEEP - Expected behavior):")
+        print(f"Found {len(cleaner.cross_run_identical)} folder/filename pairs that appear in multiple runs")
+        for i, item in enumerate(cleaner.cross_run_identical[:5]):  # Show first 5
+            print(f"  {i+1}. {item['folder_filename']}")
+            for file_info in item['files']:
+                print(f"     └─ {file_info['run_folder']}/{file_info['desc_folder']}/{file_info['filename']}")
+        if len(cleaner.cross_run_identical) > 5:
+            print(f"     ... and {len(cleaner.cross_run_identical) - 5} more")
+    
+    if cleaner.true_duplicates:
+        print(f"\n🗑️  TRUE DUPLICATES (REMOVE - Problematic):")
+        print(f"Found {len(cleaner.true_duplicates)} groups with exact same folder+filename")
+        for i, dup in enumerate(cleaner.true_duplicates[:5]):
+            print(f"  {i+1}. {dup['folder_filename']} appears {dup['count']} times:")
+            for file_info in dup['files']:
+                print(f"     └─ {file_info['path']}")
+        if len(cleaner.true_duplicates) > 5:
+            print(f"     ... and {len(cleaner.true_duplicates) - 5} more groups")
+    
+    if cleaner.within_folder_duplicates:
+        print(f"\n⚠️  WITHIN-FOLDER DUPLICATES (VERIFIED - Same content, different names):")
+        print(f"Found {len(cleaner.within_folder_duplicates)} groups with truly identical content in same folder")
+        for i, dup in enumerate(cleaner.within_folder_duplicates[:3]):
+            print(f"  {i+1}. In {dup['folder_path']} (Hash: {dup['hash'][:8]}...):")
+            print(f"      Size: {cleaner.format_bytes(dup['size_bytes'])}")
+            for file_info in dup['files']:
+                print(f"     └─ {file_info['filename']}")
+        if len(cleaner.within_folder_duplicates) > 3:
+            print(f"     ... and {len(cleaner.within_folder_duplicates) - 3} more groups")
+        print(f"     Note: These files have identical MD5 hash and file size - truly duplicated content")
+    
+    # Step 8: Auto-run based on parameters
+    if auto_run_dry_run:
+        print(f"\n🧪 STEP 7: Running DRY RUN automatically...")
+        files_to_remove, removal_reasons = cleaner.clean_dataset(dry_run=True)
+        
+        if files_to_remove:
+            print(f"\n📋 DETAILED DRY RUN RESULTS:")
+            print("=" * 60)
+            
+            # Group files by reason
+            reason_groups = defaultdict(list)
+            for file_path, reason in zip(files_to_remove, removal_reasons):
+                reason_groups[reason].append(file_path)
+            
+            for reason, file_list in reason_groups.items():
+                print(f"\n🗑️  {reason.replace('_', ' ').title()} ({len(file_list)} files):")
+                # Show first few examples
+                for i, file_path in enumerate(file_list[:3]):
+                    print(f"  {i+1}. {file_path}")
+                if len(file_list) > 3:
+                    print(f"     ... and {len(file_list) - 3} more files")
+        else:
+            print("✅ No files need to be removed!")
+    
+    if auto_clean:
+        print(f"\n🗑️  STEP 8: Actually cleaning files...")
+        files_removed, removal_reasons = cleaner.clean_dataset(dry_run=False)
+        print(f"✅ Cleaning complete!")
+    
+    print(f"\n✅ Dataset analysis complete!")
+    print(f"📁 Reports saved to: {reports_dir}")
+    
+    # Final summary
+    print(f"\n📊 FINAL SUMMARY:")
+    unique_images = len([f for f in cleaner.file_stats.values() if f['is_image']])
+    expected_cross_run = len(cleaner.cross_run_identical)
+    
+    print(f"  Total unique images: {unique_images:,}")
+    print(f"  Cross-run pairs (expected): {expected_cross_run}")
+    print(f"  Effective unique scenarios: {unique_images - expected_cross_run:,}")
+    
+    return cleaner
+
+# Simplified functions for direct execution
+def analyze_only(data_path="data"):
+    """Just analyze without any cleaning"""
+    return clean_dataset_smart(data_path, auto_run_dry_run=False, auto_clean=False)
+
+def analyze_and_dry_run(data_path="data"):
+    """Analyze and show what would be removed"""
+    return clean_dataset_smart(data_path, auto_run_dry_run=True, auto_clean=False)
+
+def analyze_and_clean(data_path="data"):
+    """Analyze and actually clean the files"""
+    return clean_dataset_smart(data_path, auto_run_dry_run=True, auto_clean=True)
+
+# Quick test function for immediate feedback
+def quick_scan(data_path="data", max_files=1000):
+    """Quick scan of first N files to test the system"""
+    print(f"🚀 Quick scan of first {max_files} files...")
+    
+    cleaner = DatasetCleaner(data_path, "test_output")
+    
+    # Scan limited files
+    processed = 0
+    for file_path in cleaner.data_path.rglob('*'):
+        if file_path.is_file() and processed < max_files:
+            if processed % 100 == 0:
+                print(f"  Processing file {processed}/{max_files}...")
+            file_info = cleaner.analyze_single_file(file_path)
+            if file_info:
+                cleaner.file_stats[str(file_path)] = file_info
+                processed += 1
+        elif processed >= max_files:
+            break
+    
+    print(f"✅ Quick scan complete: {len(cleaner.file_stats)} files processed")
+    
+    # Quick analysis
+    cleaner.find_duplicates_smart()
+    
+    print(f"\n📊 Quick Results:")
+    corrupted_count = sum(1 for info in cleaner.file_stats.values() if info.get('is_corrupted', False))
+    too_small_count = sum(1 for info in cleaner.file_stats.values() if info.get('is_too_small', False))
+    print(f"  Corrupted: {corrupted_count}")
+    print(f"  Small files: {too_small_count}")
+    print(f"  True duplicates: {len(cleaner.true_duplicates)}")
+    print(f"  Cross-run identical: {len(cleaner.cross_run_identical)}")
+    
+    # Show what would be removed
+    files_to_remove, reasons = cleaner.clean_dataset(dry_run=True)
+    
+    return cleaner
+
+# Usage - DIRECT EXECUTION (No interactive input needed)
+if __name__ == "__main__":
+    # Choose ONE of these options:
+    
+    # Option 1: Quick test (recommended first)
+    # print("🧪 Running quick test...")
+    # quick_cleaner = quick_scan("data", 500)
+    
+    # Option 2: Full analysis only (no cleaning)
+    # cleaner = analyze_only("data")
+    
+    # Option 3: Full analysis + dry run (see what would be removed)
+    # cleaner = analyze_and_dry_run("data")
+    
+    # Option 4: Full analysis + actually clean files  
+    cleaner = analyze_and_clean("data")

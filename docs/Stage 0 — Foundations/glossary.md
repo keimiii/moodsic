@@ -3,10 +3,12 @@
 - Valence/Arousal scales:
   - FindingEmo valence: `[-3, 3]`
   - FindingEmo arousal: `[0, 6]`
-  - DEAM valence/arousal: `[-10, 10]`
-  - FE→DEAM mapping:
-    - Valence: `v_deam = (10/3) * v_fe`
-    - Arousal: `a_deam = -10 + (20/6) * a_fe`
+  - DEAM dynamic annotations (per-frame): `[-10, 10]`
+  - DEAM static annotations (per 45s excerpt): `[1, 9]`
+  - For this academic POC, we use DEAM static annotations `[1, 9]`.
+  - FE→DEAM mapping (POC: to static [1, 9]):
+    - Valence: `v_deam = 1 + (8/6) * (v_fe + 3)`
+    - Arousal: `a_deam = 1 + (8/6) * a_fe`
 
 - PERCEIVE: Per-frame extraction of valence–arousal using scene and face models with MC Dropout for uncertainty.
 
@@ -27,3 +29,7 @@
 - KD-Tree / k-NN: Data structure and method used for fast nearest-neighbor search over DEAM segment valence–arousal space.
 
 - Fusion (variance-weighted): Combine predictions by weighting each by inverse variance; normalized to produce fused prediction and approximate fused variance.
+
+- Affine Calibration: Cross-domain bias correction using learnable linear transformation `output = scale * input + shift`. Corrects systematic differences between emotion datasets (e.g., EmoNet face predictions vs FindingEmo scene labels) with 4 parameters: scale_v, scale_a, shift_v, shift_a.
+
+- Domain Shift: Systematic biases between emotion recognition contexts (facial expressions vs scene emotions) due to different annotation protocols, human labelers, and semantic gaps between modalities.
