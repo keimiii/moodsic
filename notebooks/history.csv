@@ -1,0 +1,2 @@
+epoch,train_loss,valid_loss,ccc_v,ccc_a,ccc_avg,mse,time
+0,None,None,None,None,None,00:36
