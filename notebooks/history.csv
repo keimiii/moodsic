@@ -1,2 +1,2 @@
-epoch,train_loss,valid_loss,ccc_v,ccc_a,ccc_avg,mse,time
-0,None,None,None,None,None,00:36
+epoch,train_loss,valid_loss,ccc_v,ccc_a,ccc_avg,mse_fe,mae_fe,time
+0,0.08026065677404404,nan,nan,nan,2.8893842697143555,1.4370356798171997,07:09
