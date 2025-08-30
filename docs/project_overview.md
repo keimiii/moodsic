@@ -90,7 +90,10 @@ POC Evaluation Plan (Ablations)
 - Scene-only: Scene model on full dataset.
 - Fusion (late): Weighted combination on faces-found subset.
 - Fusion + gating: Fallback to scene-only when no face; report on full dataset. This serves as the headline metric.
-- Metrics: CCC (valence, arousal, mean), plus Pearson r and Spearman ρ for diagnostics. Always state scale conversions used.
+- Metrics: Previously emphasized CCC (valence, arousal, mean) plus Pearson r
+  and Spearman ρ for diagnostics. Note: CCC is under review (FindingEmo paper
+  excludes it); team may prioritize MAE/MSE (in FE units) and Spearman ρ.
+  Always state scale conversions used.
 
 Observed Limitations (Aug 25, 2025)
 
@@ -101,12 +104,61 @@ Observed Limitations (Aug 25, 2025)
 
 Scale Conversions (for clarity)
 
+- Reference alignment (unchanged): We use Reference [-1, 1] as the canonical
+  alignment across models (EmoNet, Scene, DEAM).
 - FindingEmo → Reference [-1, 1]: v_ref = v_fe / 3; a_ref = (a_fe − 3) / 3.
 - Reference → FindingEmo: v_fe = 3 · v_ref; a_fe = 3 · a_ref + 3.
+- Scene training normalization (for stability): FE → unit [0,1]
+  - v_unit = (v_fe + 3) / 6
+  - a_unit = a_fe / 6
+- Inverse for reporting: unit [0,1] → FE units
+  - v_fe = 6 · v_unit − 3
+  - a_fe = 6 · a_unit
 
 ## 3. System Architecture
 
-Face path: EmoNet (pretrained) serves as the face expert; scene path remains CLIP/ViT fine-tuned on FindingEmo. Fusion uses inverse-variance weighting.
+Face path: EmoNet (pretrained) serves as the face expert; scene path remains
+CLIP/ViT/DINO under evaluation on FindingEmo. Fusion uses inverse-variance
+weighting.
+
+### Scene Model
+
+- Status: Final backbone selection is in progress. Candidates include
+  DINOv3 ViT-B/16, CLIP-ViT, and EfficientNet. The CLIP-based code snippet
+  below remains illustrative for the baseline; current experiments prioritize
+  DINOv3 with a small regression head trained on top of a frozen backbone.
+
+#### DINOv3 ViT-B/16 (current experiment)
+
+- Backbone: `facebook/dinov3-vitb16-pretrain-lvd1689m` (frozen backbone) with a
+  lightweight regression head trained on FindingEmo.
+- Head design:
+  - Primary: `LayerNorm(feat_dim) → Dropout(p) → Linear(feat_dim, hidden) →`
+    `GELU → Linear(hidden, 2) → Sigmoid`
+  - Simple: `LayerNorm(feat_dim) → Linear(feat_dim, 2) → Sigmoid`
+- Preprocessing: Aspect-preserving resize + letterbox to ~800×608
+  (ViT-B/16 patch-aligned; aligning with FindingEmo paper settings), pad color 0;
+  `IMAGE_SIZE=608`; model inputs shaped `(3, 608, 800)`.
+- Splits: VA-binned 70/15/15 train/val/test split.
+- Scale handling:
+  - Training: FE → unit [0,1] (stability, aligns with FindingEmo baselines);
+    metrics are reported in FE units via inverse mapping.
+  - Reference space [-1,1] remains the cross-model alignment for EmoNet/Scene/
+    DEAM (unchanged policy).
+- Loss and metrics (current run):
+  - Loss: MSE in unit [0,1] space.
+  - Test metrics (FE units unless stated):
+    - `test_loss` (criterion in [0,1]): 0.0802606568
+    - `test_mse`: 2.8893843
+    - `test_mae_v`: 1.5041405; `test_mae_a`: 1.3699309; `test_mae_avg`: 1.4370357
+    - Spearman’s ρ — V: 0.2116446; A: 0.1460789; Avg: 0.1788618
+    - CCC — `test_ccc_v/a/avg`: NaN (torchmetrics warning: near-zero variance)
+  - Training/validation: train_loss/valid_loss tracked via CSVLogger; best
+    validation is selected for testing.
+- Metrics policy (status): CCC was initially emphasized, but the FindingEmo
+  paper excludes CCC; the team is reevaluating primary metrics. MAE/MSE (FE
+  units) and Spearman’s ρ are reported; CCC may be retained as supplemental or
+  removed pending decision.
 
 ### Complete Processing Pipeline with Phased Implementation
 
@@ -120,9 +172,11 @@ FindingEmo Dataset (25k images with V-A labels)
     +------------------------+
     | Data Processing        |
     | - Download & validate  |
-    | - Train/val/test split |
+    | - Train/val/test split (VA-binned 70/15/15) |
     | - Face detection cache |
-    | - Augmentation setup    |
+    | - Aspect-preserving letterbox to 800×608 (pad=0) |
+    | - IMAGE_SIZE=608; patch-aligned to ViT-B/16 |
+    | - Augmentation setup   |
     +------------------------+
                 |
          ---------------
@@ -1131,6 +1185,11 @@ gradio==3.50.0          # Demo interface
 matplotlib==3.7.1       # Visualization
 tqdm==4.65.0           # Progress tracking
 ```
+
+Front-end status: Undecided. Current prototypes use Gradio for quick
+experiments, and the repository also includes a Streamlit/WebRTC app
+(`app.py`) as a primary candidate UI. The final front-end choice is
+to be determined.
 
 ### 11.1 EmoNet Integration and Licensing
 
