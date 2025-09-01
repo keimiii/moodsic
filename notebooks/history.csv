@@ -1,2 +1,2 @@
-epoch,train_loss,valid_loss,mae_v_fe,mae_a_fe,mae_fe,time
-0,0.32351312041282654,1.505411982536316,1.3749094009399414,1.4401605129241943,07:05
+epoch,train_loss,valid_loss,ccc_v,ccc_a,ccc_avg,mae_v_fe,mae_a_fe,mae_fe,time
+0,0.3236350119113922,nan,nan,nan,1.5162131786346436,1.372524380683899,1.4443687200546265,07:11

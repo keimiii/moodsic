@@ -170,5 +170,5 @@ data/
 models/emonet/evaluation/face_cache
  
 # Notebooks: large training artifacts
-notebooks/checkpoints/learner.pkl
+*.pkl
 notebooks/models/
