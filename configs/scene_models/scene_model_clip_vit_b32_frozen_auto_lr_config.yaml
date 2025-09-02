@@ -1,0 +1,221 @@
+# Scene Model Configuration - CLIP ViT-B/32 with Frozen Backbone and Auto LR
+# Research findings show CLIP ViT performs well for V-A regression
+# Production-ready configuration with automatic learning rate detection
+
+# Inherits from base config and overrides for CLIP
+base_config: "../base_config.yaml"
+
+# Model Configuration (CLIP ViT-B/32 specific)
+model:
+  model_name: "scene_emotion_clip_vit_b32_frozen"
+  backbone: "clip_vit_b32"                  # CLIP ViT-B/32
+  backbone_type: "clip"                     # Backbone type for transforms
+  clip_model_name: "ViT-B/32"               # CLIP model variant
+  backbone_path: null                       # CLIP loads from online
+  feature_dim: 512                          # CLIP ViT-B/32 feature dimension
+  
+  # Head configuration (adjusted for CLIP features)
+  head_type: "multi_task"                   # V-A regression + Emo8 classification
+  head_config:
+    hidden_dims: [256, 128]                 # Smaller hidden dimensions for CLIP
+    dropout_rate: 0.15                      # Less dropout (CLIP features more robust)
+    batch_norm: true
+    activation: "relu"                      # ReLU for CLIP compatibility
+  
+  # Output configuration
+  va_output_range: [-1, 1]                  # V-A range as per research
+  va_activation: "tanh"                     # Tanh for bounded output
+  emo8_classes: 8                           # 8 Plutchik emotions
+  
+  # Backbone settings (research finding: freeze backbone, retrain head)
+  freeze_backbone: true                     # Freeze CLIP parameters
+  unfreeze_epochs: null                     # Keep frozen throughout training
+
+# Training Configuration (CLIP-specific with AUTO LR)
+training:
+  # Core hyperparameters
+  batch_size: 32                            # Maintain batch size
+  
+  # 🤖 AUTOMATIC LEARNING RATE DETECTION
+  learning_rate: "auto"                      # Automatically detect optimal LR using lr_finder
+  use_lr_finder: true                       # Enable LR finder for precise detection
+  lr_finder_config:
+    start_lr: 1e-7                          # LR range test start
+    end_lr: 1e-2                           # LR range test end
+    num_iter: 50                           # Number of iterations for LR test
+    method: "steepest"                      # Use steepest descent method
+  
+  # Differential learning rates (will be auto-calculated)
+  backbone_lr_factor: 0.05                  # CLIP backbone LR = auto_lr * 0.05 (lower)
+  head_lr_factor: 1.0                       # Head LR = auto_lr * 1.0
+  
+  weight_decay: 0.0001
+  num_epochs: 40                            # CLIP may converge faster
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 10
+    monitor_metric: "val_ccc_avg"
+    mode: "max"                               # val_ccc_avg should be maximized
+    min_delta: 0.001
+    restore_best_weights: true
+  
+  # Optimization (will be configured automatically)
+  optimizer: "adam"                         # Adam works well with CLIP
+  optimizer_config:
+    weight_decay: 0.0001
+    betas: [0.9, 0.999]
+  scheduler: "auto"                         # Auto-configure based on detected LR
+  
+  # Loss configuration (CLIP features may need different weighting)
+  loss:
+    type: "combined"
+    va_loss_weight: 1.0
+    emo8_loss_weight: 0.15                  # Slightly higher for CLIP
+    use_focal_loss: false
+    
+    # WMSE configuration
+    use_ambiguity_weights: true
+    use_age_weights: true
+    ambiguity_weight_factor: 0.5
+    
+    # UCE configuration
+    weight_mode: "inverse_freq"
+    smooth_factor: 0.1
+
+# Data Configuration (CLIP-specific)
+data:
+  # Dataset paths
+  dataset_type: "findingemo"
+  findingemo_path: "/Users/kevinmanuel/Documents/NUS-Project-Sem2/FindingEmo"  # FindingEmo dataset path
+  
+  # Splits (research finding: 80/20 with stratification)
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  
+  # Stratification
+  stratify_on: ["emo8", "valence_bin", "arousal_bin"]
+  save_split_indices: true
+  load_split_indices: true
+  
+  # CLIP-specific preprocessing: CLIP ViT-B/32 expects 224x224 square images
+  image_size: 224                           # CLIP ViT-B/32 input size
+  keep_aspect_ratio: false                  # CLIP expects square images
+  use_backbone_specific: true               # Use CLIP normalization
+  
+  # Augmentation (conservative for CLIP)
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    rotation: 15                            # Less rotation for CLIP
+    crop_scale: [0.85, 1.0]                # Less aggressive cropping
+    perspective_transform: 0.1              # Minimal perspective for CLIP
+    color_jitter:
+      brightness: 0.25                      # More conservative color jitter
+      contrast: 0.25
+      saturation: 0.15
+      hue: 0.05
+    gaussian_blur: 0.05                     # Minimal blur for CLIP
+
+# Hardware Configuration (optimized for Apple Silicon)
+hardware:
+  device: "auto"                            # Auto-detect MPS/CPU
+  mixed_precision: true                     # Enable when supported
+  num_workers: 4                            # Conservative for stability
+  pin_memory: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  log_dir: "./logs"
+  experiment_name: "scene_emotion_clip_vit_b32_frozen"   # Descriptive name
+  
+  # Progress tracking
+  log_every_n_steps: 25
+  eval_every_n_epochs: 1
+  save_every_n_epochs: 5
+  
+  # TensorBoard logging
+  tensorboard:
+    enabled: true
+    log_dir: "./tensorboard_logs"
+    log_images: true
+    log_histograms: false
+
+# Checkpointing Configuration
+checkpointing:
+  save_dir: "./experiments/checkpoints/scene_model_clip_vit_b32_frozen"
+  save_best_only: false
+  monitor_metric: "val_ccc_avg"
+  save_optimizer: true
+  save_scheduler: true
+  save_every_n_epochs: 5
+
+# Evaluation Configuration (research findings)
+evaluation:
+  # Core metrics (research emphasis on MAE and Spearman-r)
+  metrics:
+    - "mae"                                 # Mean Absolute Error (key for V-A)
+    - "mse"                                 # Mean Square Error
+    - "rmse"                                # Root MSE
+    - "ccc"                                 # Concordance Correlation Coefficient
+    - "pearson"                             # Pearson correlation
+    - "spearman"                            # Spearman rank correlation (important)
+  
+  # Advanced evaluation
+  compute_per_quadrant: true
+  save_predictions: true
+  
+  # Emo8 evaluation
+  emo8_metrics:
+    - "weighted_f1"
+    - "macro_f1"
+    - "mean_ap"
+    - "accuracy"
+
+# Reproducibility
+reproducibility:
+  seed: 42
+  deterministic: true
+  benchmark: false
+
+# Research-specific settings
+research:
+  # Research finding: buffer frozen embeddings for faster training
+  buffer_frozen_features: true              # Cache CLIP features
+  
+  # Learning rate schedule (will be auto-configured)
+  lr_decay_schedule:
+    enabled: true
+    method: "auto"
+  
+  # Cross-validation settings
+  cross_validation:
+    enabled: false
+    n_folds: 5
+    
+  # Evaluation extras
+  wheel_aware_metrics: true
+  ethnicity_analysis: false
+  
+  # Class imbalance analysis
+  report_class_imbalance: true
+  analyze_skew: true
+
+# Scene Model specific settings
+scene_model:
+  # Output heads
+  use_emo8_head: true
+  use_va_head: true
+  
+  # Scene-specific features
+  scene_context_window: null
+  multi_scale_features: false
+  
+  # FindingEmo dataset specifics
+  handle_deciding_factors: true
+  use_ambiguity_scores: true
+  age_group_analysis: true
+
