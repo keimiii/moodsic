@@ -140,9 +140,9 @@ Acceptance criteria:
 
 ## Quick Implementation Checklist
 
-- [ ] EmoNetSingleFaceProcessor (MediaPipe) in utils/
-- [ ] Face alignment helper or inline adapter integration
-- [ ] EmoNetAdapter with calibration + scale alignment
-- [ ] TTA (flip + crop/scale jitter) and variance aggregation
-- [ ] Fusion module and runtime integration
-- [ ] Update dependencies; confirm environment notes
+ - [x] EmoNetSingleFaceProcessor (MediaPipe) in utils/
+ - [ ] Face alignment helper or inline adapter integration
+ - [ ] EmoNetAdapter with calibration + scale alignment
+ - [ ] TTA (flip + crop/scale jitter) and variance aggregation
+ - [ ] Fusion module and runtime integration
+ - [ ] Update dependencies; confirm environment notes
