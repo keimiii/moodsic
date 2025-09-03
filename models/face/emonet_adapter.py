@@ -134,43 +134,61 @@ class EmoNetAdapter:
         Returns:
             (valence_ref, arousal_ref, (var_v, var_a)) in reference space [-1, 1].
         """
-        if face_bgr is None or not isinstance(face_bgr, np.ndarray) or face_bgr.ndim != 3 or face_bgr.shape[2] != 3:
-            # Invalid input: return neutral with zero variance (Task 3 contract)
+        if (
+            face_bgr is None
+            or not isinstance(face_bgr, np.ndarray)
+            or face_bgr.ndim != 3
+            or face_bgr.shape[2] != 3
+        ):
+            # Invalid input: return neutral with zero variance
             return 0.0, 0.0, (0.0, 0.0)
 
-        # Effective TTA (Task 4 extends this). For now, single deterministic pass.
-        _ = self.tta_default if tta is None else int(tta)
+        # Effective TTA count
+        n_tta = self.tta_default if tta is None else int(tta)
+        if n_tta <= 1:
+            n_tta = 1
 
-        # Preprocess: align to level eyes if possible, then BGR->RGB, resize, normalize
+        # Preprocess base: eye-level alignment then canonical 256x256
         aligned_bgr = self._align_face_by_eyes_mediapipe(face_bgr)
-        rgb = cv2.cvtColor(aligned_bgr, cv2.COLOR_BGR2RGB)
-        rgb = cv2.resize(rgb, (256, 256))
-        arr = rgb.astype(np.float32) / 255.0
-        chw = np.transpose(arr, (2, 0, 1))  # CHW
-        tensor = torch.from_numpy(chw).unsqueeze(0).to(self.device)
+        base_bgr_256 = cv2.resize(aligned_bgr, (256, 256))
+
+        # Build augmented variants (always include original; include flip; add scale/crop jitter)
+        batch_chw = self._build_tta_batch(base_bgr_256, n_tta)
+
+        # Convert to torch batch
+        tensor = torch.from_numpy(batch_chw).to(self.device)
 
         with torch.no_grad():
             out = self._emonet(tensor)
-            # EmoNet returns dict with 'valence' and 'arousal'
-            v_raw = out["valence"].view(-1).detach().cpu().numpy()[0]
-            a_raw = out["arousal"].view(-1).detach().cpu().numpy()[0]
+            # Model outputs (N,) in raw EmoNet space (already ~[-1,1])
+            v_raw = out["valence"].view(-1)
+            a_raw = out["arousal"].view(-1)
 
-        # Scale alignment (already in [-1, 1], but ensure range/dtype)
-        v_ref, a_ref = self.scale_aligner.emonet_to_reference(v_raw, a_raw)
-        v_ref = float(v_ref.item() if hasattr(v_ref, "item") else v_ref)
-        a_ref = float(a_ref.item() if hasattr(a_ref, "item") else a_ref)
+            # Reference-space clamp [-1, 1]
+            v_ref_t = torch.clamp(v_raw, -1.0, 1.0)
+            a_ref_t = torch.clamp(a_raw, -1.0, 1.0)
 
-        # Optional calibration in reference space
-        if self.calibration is not None:
-            with torch.no_grad():
-                v_t = torch.tensor([v_ref], dtype=torch.float32, device=self.device)
-                a_t = torch.tensor([a_ref], dtype=torch.float32, device=self.device)
-                v_cal, a_cal = self.calibration(v_t, a_t)
-                v_ref = float(v_cal.item())
-                a_ref = float(a_cal.item())
+            # Optional calibration in reference space
+            if self.calibration is not None:
+                v_ref_t, a_ref_t = self.calibration(v_ref_t, a_ref_t)
+                # Ensure final bounds
+                v_ref_t = torch.clamp(v_ref_t, -1.0, 1.0)
+                a_ref_t = torch.clamp(a_ref_t, -1.0, 1.0)
 
-        # No TTA variance for Task 3 (to be implemented in Task 4)
-        return v_ref, a_ref, (0.0, 0.0)
+        # Move to CPU numpy for aggregation
+        v_np = v_ref_t.detach().cpu().numpy().astype(np.float32)
+        a_np = a_ref_t.detach().cpu().numpy().astype(np.float32)
+
+        # Aggregate mean and unbiased variance
+        mean_v = float(np.mean(v_np))
+        mean_a = float(np.mean(a_np))
+        if v_np.size > 1:
+            var_v = float(np.var(v_np, ddof=1))
+            var_a = float(np.var(a_np, ddof=1))
+        else:
+            var_v, var_a = 0.0, 0.0
+
+        return mean_v, mean_a, (var_v, var_a)
 
     # ---------- Internals ----------
     def _select_device(self, device: str):
@@ -320,5 +338,155 @@ class EmoNetAdapter:
             )
             return face_bgr
 
+    # --------- TTA helpers ---------
+    def _build_tta_batch(self, base_bgr_256: np.ndarray, n_tta: int) -> np.ndarray:
+        """
+        Build a batch of CHW images in [0,1] with TTA variants:
+        - Always include original
+        - Include horizontal flip of the original
+        - Fill remaining with small scale/crop jitter variants
+
+        Returns: np.ndarray of shape (N, 3, 256, 256), dtype float32
+        """
+        # Ensure base is 256x256 BGR
+        if base_bgr_256.shape[:2] != (256, 256):
+            base_bgr_256 = cv2.resize(base_bgr_256, (256, 256))
+
+        variants: list[np.ndarray] = []
+        variants.append(base_bgr_256)
+
+        if n_tta >= 2:
+            variants.append(cv2.flip(base_bgr_256, 1))  # horizontal flip
+
+        # Deterministic RNG seed per call, derived from image content
+        # Using uint32 sum keeps it fast and stable across runs
+        seed = int(np.uint32(base_bgr_256.sum()))
+        rng = np.random.RandomState(seed)
+
+        # Fill remaining slots with scale/crop jitter
+        needed = max(0, n_tta - len(variants))
+        for _ in range(needed):
+            # Scale factor in [0.96, 1.04]
+            scale = 1.0 + (rng.rand() * 0.08 - 0.04)
+            jittered = self._scale_jitter_center(base_bgr_256, scale)
+            variants.append(jittered)
+
+        # Convert to RGB, normalize to [0,1], CHW, and stack
+        batch = []
+        for bgr in variants[:n_tta]:
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            arr = rgb.astype(np.float32) / 255.0
+            chw = np.transpose(arr, (2, 0, 1))
+            batch.append(chw)
+        return np.stack(batch, axis=0).astype(np.float32)
+
+    def _scale_jitter_center(self, img_256: np.ndarray, scale: float) -> np.ndarray:
+        """
+        Apply scale jitter about the center, returning a 256x256 BGR image.
+        - If scale > 1: zoom in by cropping a smaller center region and resizing back.
+        - If scale < 1: zoom out by shrinking and padding reflectively back to 256.
+        """
+        h, w = img_256.shape[:2]
+        assert h == 256 and w == 256, "_scale_jitter_center expects 256x256 input"
+
+        # Guard extreme cases
+        scale = float(max(0.90, min(1.10, scale)))
+
+        new_size = max(1, int(round(256 * scale)))
+        resized = cv2.resize(img_256, (new_size, new_size), interpolation=cv2.INTER_LINEAR)
+        if new_size == 256:
+            return resized
+        if new_size > 256:
+            # Center crop to 256
+            start = (new_size - 256) // 2
+            end = start + 256
+            return resized[start:end, start:end]
+        else:
+            # Pad to 256 with reflection, then center crop (in case of off-by-one)
+            pad_total = 256 - new_size
+            top = pad_total // 2
+            bottom = pad_total - top
+            left = pad_total // 2
+            right = pad_total - left
+            padded = cv2.copyMakeBorder(
+                resized, top, bottom, left, right, borderType=cv2.BORDER_REFLECT_101
+            )
+            if padded.shape[0] != 256 or padded.shape[1] != 256:
+                # Final safety crop
+                y0 = max(0, (padded.shape[0] - 256) // 2)
+                x0 = max(0, (padded.shape[1] - 256) // 2)
+                padded = padded[y0 : y0 + 256, x0 : x0 + 256]
+            return padded
+
 
 __all__ = ["EmoNetAdapter"]
+
+
+def _cli() -> int:
+    """Lightweight CLI for single-image inference with TTA."""
+    import argparse
+    import cv2
+
+    parser = argparse.ArgumentParser(description="Run EmoNetAdapter on an image")
+    parser.add_argument("--image", "-i", required=True, help="Path to input image")
+    parser.add_argument("--tta", type=int, default=5, help="Number of TTA samples")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Device selection",
+    )
+    parser.add_argument(
+        "--calibration",
+        type=str,
+        default=None,
+        help="Optional path to CrossDomainCalibration checkpoint",
+    )
+    parser.add_argument(
+        "--min-det-conf",
+        type=float,
+        default=0.5,
+        help="MediaPipe min detection confidence",
+    )
+    parser.add_argument(
+        "--padding",
+        type=float,
+        default=0.2,
+        help="Padding ratio around detected bbox",
+    )
+    args = parser.parse_args()
+
+    img = cv2.imread(args.image)
+    if img is None:
+        print(f"Failed to read image: {args.image}")
+        return 1
+
+    try:
+        from utils.emonet_single_face_processor import EmoNetSingleFaceProcessor
+    except Exception as e:
+        print(f"Failed to import face processor: {e}")
+        return 1
+
+    face_proc = EmoNetSingleFaceProcessor(
+        min_detection_confidence=args.min_det_conf, padding_ratio=args.padding
+    )
+    face, bbox, score = face_proc.extract_primary_face(img)
+    if face is None:
+        print("No face detected")
+        return 2
+
+    adapter = EmoNetAdapter(
+        # default head size is 8 in the adapter; prefer 8-class weights
+        device=args.device,
+        tta=args.tta,
+        calibration_checkpoint=args.calibration,
+    )
+    v, a, (v_var, a_var) = adapter.predict(face)
+    print(
+        f"valence={v:.3f} arousal={a:.3f} v_var={v_var:.4f} a_var={a_var:.4f}"
+    )
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(_cli())

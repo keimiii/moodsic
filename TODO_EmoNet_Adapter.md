@@ -145,7 +145,7 @@ Acceptance criteria:
 
  - [x] EmoNetSingleFaceProcessor (MediaPipe) in utils/
  - [x] Face alignment via MediaPipe eye-keypoints (no extra helper by default)
- - [ ] EmoNetAdapter with calibration + scale alignment
- - [ ] TTA (flip + crop/scale jitter) and variance aggregation
+ - [x] EmoNetAdapter with calibration + scale alignment
+ - [x] TTA (flip + crop/scale jitter) and variance aggregation
  - [ ] Fusion module and runtime integration
  - [ ] Update dependencies; confirm environment notes
