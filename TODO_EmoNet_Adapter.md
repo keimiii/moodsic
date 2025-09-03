@@ -29,19 +29,22 @@ Acceptance criteria:
 
 ---
 
-## 2) Face Alignment (face-alignment library)
+## 2) Face Alignment (MediaPipe eye-keypoints)
 
-- What: Add a face alignment step to normalize the detected face prior to EmoNet.
-- Why: EmoNet upstream assumes aligned faces; alignment improves robustness and matches expected input distribution.
+- What: Add a lightweight face alignment step using MediaPipe’s eye keypoints to normalize the detected face prior to EmoNet.
+- Why: EmoNet upstream assumes roughly aligned faces. For this POC, MediaPipe-based eye-level rotation offers most of the benefit with minimal overhead.
+- Decision: Do not add the `face-alignment` (1adrianb) dependency by default. Reasons:
+  - Overhead: Large dependency and first-run downloads; increases latency on CPU.
+  - Scope: For a demo/POC, rotation to level the eyes captures the main gains; full 5-point similarity adds marginal robustness.
+  - Simplicity: We already depend on MediaPipe for detection; reuse its keypoints and avoid another model.
 - How:
-  - Add dependency: `face-alignment` (1adrianb) and its prerequisites (PyTorch present elsewhere).
-  - Implement `align_face(face_bgr) -> np.ndarray` in a helper (either inside the adapter or a new `utils/emonet_face_alignment_utils.py`).
-  - Instantiate `face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=False)` once and reuse.
-  - Detect landmarks on the 256×256 (or original) crop; compute similarity transform to align eyes horizontally; warp to 256×256.
-  - Fallback: if landmarks not found, return the resized crop (no alignment) and log a debug warning.
+  - Use MediaPipe Face Detection keypoints (left/right eye) to compute the inter-ocular angle.
+  - Rotate the face crop to level the eye line horizontally, then resize to 256×256.
+  - Fallback: if keypoints are missing/unreliable, return the resized crop (no alignment) and log a debug warning.
+  - Optional: If Face Mesh is available, you may refine eye centers from mesh landmarks, but keep MediaPipe-based rotation as the default.
 
 Acceptance criteria:
-- For valid faces, produces an aligned 256×256 BGR image; degrades gracefully when landmarks fail.
+- For valid faces, produces an eye-leveled 256×256 BGR image; degrades gracefully when keypoints fail.
 
 ---
 
@@ -113,9 +116,10 @@ Acceptance criteria:
 - Why: Ensure reproducible installs and working runtime.
 - How:
   - Add to `requirements.txt` (or project’s preferred lock):
-    - `mediapipe` (face detection)
-    - `face-alignment` (alignment)
+    - `mediapipe` (face detection + keypoints for alignment)
     - `torch`, `torchvision` (if not already managed elsewhere)
+  - Optional (not default for POC):
+    - `face-alignment` can be enabled later if we need full landmark-based similarity transforms.
   - Confirm guidance in docs to use `uv pip install <package>` and to activate the virtualenv via `source .venv/bin/activate.fish`.
 
 Acceptance criteria:
@@ -132,7 +136,6 @@ Acceptance criteria:
 ## Suggested File Layout
 
  - utils/emonet_single_face_processor.py
-- utils/emonet_face_alignment_utils.py (optional if alignment is not in the adapter)
 - models/face/emonet_adapter.py
 - models/fusion.py
 
@@ -141,7 +144,7 @@ Acceptance criteria:
 ## Quick Implementation Checklist
 
  - [x] EmoNetSingleFaceProcessor (MediaPipe) in utils/
- - [ ] Face alignment helper or inline adapter integration
+ - [x] Face alignment via MediaPipe eye-keypoints (no extra helper by default)
  - [ ] EmoNetAdapter with calibration + scale alignment
  - [ ] TTA (flip + crop/scale jitter) and variance aggregation
  - [ ] Fusion module and runtime integration
