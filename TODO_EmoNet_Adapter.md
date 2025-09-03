@@ -147,5 +147,5 @@ Acceptance criteria:
  - [x] Face alignment via MediaPipe eye-keypoints (no extra helper by default)
  - [x] EmoNetAdapter with calibration + scale alignment
  - [x] TTA (flip + crop/scale jitter) and variance aggregation
- - [ ] Fusion module and runtime integration
+ - [x] Fusion module and runtime integration
  - [ ] Update dependencies; confirm environment notes
