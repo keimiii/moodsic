@@ -114,16 +114,73 @@ Acceptance criteria:
 
 - What: Add and verify required packages for the adapter path.
 - Why: Ensure reproducible installs and working runtime.
-- How:
-  - Add to `requirements.txt` (or project’s preferred lock):
-    - `mediapipe` (face detection + keypoints for alignment)
-    - `torch`, `torchvision` (if not already managed elsewhere)
+ - How:
+  - Virtualenv & installer:
+    - Always activate the project venv before Python commands: `source .venv/bin/activate.fish`.
+    - Use `uv pip install ...` for all package installs (fast, deterministic pip wrapper).
+
+  - Base install (existing UI/runtime):
+    - `uv pip install -r requirements.txt`
+
+  - Additions for the EmoNet adapter path (Tasks 1–5):
+    - `mediapipe` — face detection + eye keypoints for lightweight alignment.
+    - `torch`, `torchvision` — EmoNet inference backend (CPU baseline; MPS on Apple Silicon if available).
+
+  - Notes on pins and compatibility:
+    - MediaPipe has historically required protobuf in the 3.20.x series. If you encounter conflicts with a newer protobuf pin, prefer:
+      - `protobuf==3.20.3`
+      - `mediapipe==0.10.14`
+      This combo has been broadly compatible with Python 3.10–3.12 and OpenCV 4.x.
+    - PyTorch/vision: any recent 2.x works. Suggested, widely available CPU-only wheels:
+      - `torch>=2.3,<2.6` and `torchvision>=0.18,<0.21`
+      - Apple Silicon uses MPS automatically when available (no extra flags needed).
+      - Linux CUDA users can override the index URL per PyTorch docs if GPU is desired; CPU-only is sufficient for this adapter.
+
+  - Recommended install sequence (Fish shell):
+    ```fish
+    # 1) Activate venv (Fish)
+    source .venv/bin/activate.fish
+
+    # 2) Install existing app deps (UI, WebRTC, OpenCV, etc.)
+    uv pip install -r requirements.txt
+
+    # 3) Adapter deps — CPU baseline
+    uv pip install torch torchvision
+
+    # 4) MediaPipe (face detection + eye keypoints)
+    # If your environment already works with mediapipe, this may be enough:
+    uv pip install mediapipe
+
+    # If you hit protobuf conflicts, use the compatibility set below:
+    uv pip install "protobuf==3.20.3" "mediapipe==0.10.14"
+    ```
+
   - Optional (not default for POC):
-    - `face-alignment` can be enabled later if we need full landmark-based similarity transforms.
-  - Confirm guidance in docs to use `uv pip install <package>` and to activate the virtualenv via `source .venv/bin/activate.fish`.
+    - `face-alignment` can be added later if full 5-point similarity alignment is needed. Keep MediaPipe-based rotation as default.
+
+  - Vendor EmoNet code & weights (one-time, optional if not already present):
+    ```fish
+    # Fetch upstream EmoNet code into models/emonet/ (preserves license)
+    python scripts/emonet_setup.py
+    # Place checkpoints in models/emonet/pretrained/ if not included by upstream
+    ```
+
+  - Quick import smoke test (after installation):
+    ```bash
+    python - <<'PY'
+    import cv2, numpy as np
+    import mediapipe as mp
+    import torch
+
+    print('cv2:', cv2.__version__)
+    print('torch:', torch.__version__, 'cuda?', torch.cuda.is_available(), 'mps?', getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available())
+    _ = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.5)
+    print('mediapipe: ok')
+    PY
+    ```
 
 Acceptance criteria:
-- Fresh environment can install and import all dependencies used by Tasks 1–5.
+- Fresh environment (venv) can install and import all dependencies used by Tasks 1–5, and the smoke test prints versions without errors.
 
 ---
 
@@ -148,4 +205,4 @@ Acceptance criteria:
  - [x] EmoNetAdapter with calibration + scale alignment
  - [x] TTA (flip + crop/scale jitter) and variance aggregation
  - [x] Fusion module and runtime integration
- - [ ] Update dependencies; confirm environment notes
+ - [x] Update dependencies; confirm environment notes
