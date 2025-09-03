@@ -28,7 +28,7 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
   - `models/emonet/` (see [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md))
 - Adapter (our code):
   - Suggested: `models/emonet_adapter.py` (or `models/face/emonet_adapter.py`)
-  - Loads vendored package from `models/emonet/emonet/` and weights from `models/emonet/pretrained/`
+  - Loads vendored package from `models/emonet/` and weights from `models/emonet/pretrained/`
 
 ## Minimal interface
 ```python

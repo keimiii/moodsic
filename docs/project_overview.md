@@ -1206,7 +1206,7 @@ Copy the following from https://github.com/face-analysis/emonet into `models/emo
 
 - LICENSE.txt → models/emonet/LICENSE.txt
 - README.md → models/emonet/README.md
-- emonet/ → models/emonet/emonet/ (entire package directory)
+- emonet/ → models/emonet/ (entire package directory)
 - pretrained/ → models/emonet/pretrained/ (all files; includes 5-class and 8-class checkpoints)
 
 Optional (for reference/testing, not required by our pipeline):

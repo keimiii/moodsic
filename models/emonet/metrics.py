@@ -68,3 +68,4 @@ def ICC(labels, predictions):
         icc[i] = (BMS - EMS)/(BMS + EMS)
 
     return icc
+

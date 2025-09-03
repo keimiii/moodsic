@@ -55,6 +55,73 @@ Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
 files. See LICENSE.txt for details. Copyright belongs to the original authors.
 """
 
+def _merge_tree(src: Path, dst: Path, force: bool = False) -> None:
+    """Merge directory tree src into dst. If force=True, overwrite conflicts.
+    If force=False, keep existing files and skip conflicts.
+    """
+    dst.mkdir(parents=True, exist_ok=True)
+    for item in src.iterdir():
+        target = dst / item.name
+        if item.is_dir():
+            _merge_tree(item, target, force=force)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                if force:
+                    target.unlink()
+                else:
+                    # Skip existing file when not forcing
+                    continue
+            target.write_bytes(item.read_bytes())
+
+def _flatten_nested_emonet(dest: Path, force: bool = False) -> None:
+    """If vendored layout is models/emonet/emonet/..., flatten so only one
+    'emonet' package exists with this structure:
+      - models/emonet/__init__.py
+      - models/emonet/models/emonet.py (+ __init__.py)
+      - models/emonet/{evaluation.py, metrics.py, data_augmentation.py}
+      - models/emonet/data/
+    """
+    nested = dest / "emonet"
+    if not nested.exists() or not nested.is_dir():
+        return
+
+    print("Flattening nested emonet/ package into", dest)
+
+    # 1) Move emonet/models -> dest/models
+    src_models = nested / "models"
+    if src_models.exists():
+        _merge_tree(src_models, dest / "models", force=force)
+
+    # 2) Move top-level modules
+    for fname in ["evaluation.py", "metrics.py", "data_augmentation.py"]:
+        src = nested / fname
+        if src.exists():
+            dst = dest / fname
+            if dst.exists() and force:
+                dst.unlink()
+            if not dst.exists():
+                dst.write_bytes(src.read_bytes())
+
+    # 3) Move data directory
+    src_data = nested / "data"
+    if src_data.exists():
+        _merge_tree(src_data, dest / "data", force=force)
+
+    # 4) __init__.py -> dest/__init__.py (keep upstream version if forcing)
+    src_init = nested / "__init__.py"
+    if src_init.exists():
+        dst_init = dest / "__init__.py"
+        if dst_init.exists() and force:
+            dst_init.unlink()
+        if not dst_init.exists():
+            dst_init.write_bytes(src_init.read_bytes())
+
+    # 5) Cleanup: remove nested folder
+    import shutil
+    shutil.rmtree(nested, ignore_errors=True)
+    print("Flatten complete.")
+
 
 def _download_repo_zip(branch: str) -> bytes:
     url = f"https://codeload.github.com/{REPO_OWNER}/{REPO_NAME}/zip/refs/heads/{branch}"
@@ -167,6 +234,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Note: {dname}/ not found in upstream (skipping)")
 
+    # Flatten nested emonet/ if present
+    _flatten_nested_emonet(dest, force=args.force)
+
         # Optionally copy demos
         if args.include_demos:
             for fname in OPTIONAL_FILES:
@@ -192,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Summarize
     copied = []
-    for path in [*(dest / d for d in COPY_DIRS), *(dest / f for f in COPY_FILES)]:
+    for path in [*(dest / d for d in COPY_DIRS if d != "emonet"), *(dest / f for f in COPY_FILES)]:
         if path.exists():
             copied.append(path)
     weights = list(weights_dir.glob("**/*")) if weights_dir.exists() else []

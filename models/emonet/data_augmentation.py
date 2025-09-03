@@ -154,3 +154,4 @@ class DataAugmentor(object):
                     shape[:, 0] = self.target_width - shape[:, 0]
 
         return image, shape
+

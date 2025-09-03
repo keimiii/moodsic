@@ -58,7 +58,7 @@ Acceptance criteria:
     - `__init__(ckpt_dir="models/emonet/pretrained", n_classes=8, device="auto", tta=5, calibration_checkpoint: str | None = None)`
     - `predict(face_bgr: np.ndarray, tta: int | None = None) -> tuple[float, float, tuple[float, float]]`
   - Loading:
-    - Import vendored `emonet` package from `models/emonet/emonet`.
+  - Import vendored `emonet` package from `models/emonet`.
     - Construct `EmoNet(n_expression=n_classes)`, load checkpoint from `ckpt_dir` (first `*.pth` if multiple), set `eval()`.
     - Device selection: prefer CUDA, else MPS (Apple), else CPU.
   - Preprocessing:

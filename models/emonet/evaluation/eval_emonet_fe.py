@@ -51,7 +51,7 @@ if str(utils_path) not in sys.path:
 from emotion_scale_aligner import EmotionScaleAligner
 
 # Add current emonet directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 
 def sha1(x: str) -> str:
