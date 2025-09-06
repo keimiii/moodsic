@@ -7,6 +7,7 @@
 
 ## SceneEmotionRegressor
 - Input: `pixel_values` tensor from CLIP processor, shape `[B, 3, H, W]` (CLIP-normalized)
+- Output scale: reference space `[-1, 1]` for both valence and arousal
 - Output (deterministic): tuple `(valence, arousal)` each of shape `[B]`
 - Output (MC): tuple `(mean, var)` each of shape `[2, B]` where index `0` is valence, `1` is arousal
 
@@ -17,7 +18,8 @@ mean, var = scene_model(pixel_values, n_samples=5)  # shapes: [2, B], [2, B]
 
 ## Face Expert: EmoNet Adapter
 - Input: primary face crop as BGR/RGB `np.ndarray` of shape `[H, W, 3]` (adapter handles alignment + resize + normalization)
-- Output: `(valence_fe: float, arousal_fe: float, variance: (float, float))` in FindingEmo ranges
+- Output scale: reference space `[-1, 1]` for both valence and arousal
+- Output: `(valence: float, arousal: float, variance: (float, float))`
 - Uncertainty: via TTA (e.g., `tta=5`) rather than MC Dropout
 
 ```python
@@ -67,6 +69,7 @@ v_final, a_final = pipeline.emonet_to_findingemo(v_emonet, a_emonet)
 ```
 
 ## Notes
-- Scale alignment (FE→DEAM static [1, 9] for this POC) is handled in the matching stage, not in model interfaces
+- Internal contract: All model adapters (scene and face) and fusion operate in the reference space `[-1, 1]`.
+- Scale alignment (e.g., FE↔reference, DEAM static `[1, 9]`↔reference) is handled at boundaries (training/eval, retrieval), not inside model interfaces.
 - Domain calibration (see `cross-domain-calibration.md`) optionally corrects systematic biases between emotion contexts
 - Device/batching: models accept batched tensors; fusion path uses batch size `1` at runtime

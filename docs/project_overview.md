@@ -16,6 +16,30 @@ At runtime, the system still follows the perceive → stabilize → match pipeli
 
 ---
 
+## Scale Contract
+
+- Internal reference: All adapters (scene, face) and fusion operate in the common reference space `[-1, 1]` for valence and arousal.
+- Boundary conversions: Use `utils/emotion_scale_aligner.EmotionScaleAligner` to convert to/from dataset or consumer scales (e.g., FindingEmo, DEAM) only at boundaries (training/evaluation, retrieval, and diagnostics/visualization).
+- Calibration: Apply `models.calibration.CrossDomainCalibration` in the reference space; keep optional and clamp outputs back to `[-1, 1]`.
+- Development safety: In tests/diagnostics, enable strict range checks with `EmotionScaleAligner(strict=True)` to catch out‑of‑range values.
+
+Example conversions
+
+```python
+from utils.emotion_scale_aligner import EmotionScaleAligner
+
+aligner = EmotionScaleAligner()
+
+# Reference → DEAM [1, 9] before retrieval
+v_deam, a_deam = aligner.reference_to_deam_static(v_ref, a_ref)
+
+# FindingEmo ↔ reference for training/eval
+v_ref, a_ref = aligner.findingemo_to_reference(v_fe, a_fe)
+v_fe, a_fe = aligner.reference_to_findingemo(v_ref, a_ref)
+```
+
+---
+
 ### The Problem We're Solving
 
 Static background music does not account for the dynamic interplay between environmental design and human emotion. Identical facial expressions can require different musical interventions depending on the surrounding context (e.g., clinical waiting room vs. luxury retail boutique), leading to mismatched ambiance and suboptimal outcomes.

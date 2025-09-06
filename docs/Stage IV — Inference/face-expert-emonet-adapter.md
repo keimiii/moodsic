@@ -18,10 +18,10 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
 - Uncertainty (optional, recommended)
   - Test‑time augmentation (horizontal flip; minor crop/scale jitter) for N passes; return mean and per‑dimension variance for V and A.
 - Calibration
-  - Apply learned CrossDomainCalibration layer to correct face→scene domain bias.
-  - Convert EmoNet outputs → FindingEmo-aligned space for downstream FE→DEAM scaling.
+  - Apply learned CrossDomainCalibration layer to correct face→scene domain bias in the reference space.
+  - Keep outputs in reference space `[-1, 1]`; use `EmotionScaleAligner` for any conversion to dataset/consumer scales (e.g., FindingEmo, DEAM) at boundaries.
 - Output contract
-  - `(valence_fe: float, arousal_fe: float, variance: tuple[float, float])`
+  - `(valence: float, arousal: float, variance: tuple[float, float])` in reference space `[-1, 1]`
 
 ## File locations
 - Vendored upstream code and weights (unmodified):
@@ -48,8 +48,8 @@ class EmoNetAdapter:
 
     def predict(self, face_bgr: np.ndarray) -> tuple[float, float, tuple[float, float]]:
         """
-        Returns (valence_fe, arousal_fe, (v_var, a_var)) in FindingEmo ranges.
-        - Applies alignment, normalization, inference, TTA variance, and calibration.
+        Returns (valence_ref, arousal_ref, (v_var, a_var)) in reference space [-1, 1].
+        - Applies alignment, normalization, inference, TTA variance, and calibration (in reference space).
         """
         ...
 ```
@@ -58,7 +58,7 @@ class EmoNetAdapter:
 - PERCEIVE stage: after MediaPipe selects the primary face, call `adapter.predict(face_crop)`.
 - FUSION: use returned mean and variance for inverse‑variance weighting with the scene model.
 - STABILIZE: use variance for uncertainty gating.
-- MATCH: unchanged; FE→DEAM scaling already implemented.
+- MATCH: unchanged; perform FE/DEAM conversions with `EmotionScaleAligner` at this boundary when needed.
 
 ## Calibration details
 - Uses trained CrossDomainCalibration PyTorch module for learnable domain bias correction
@@ -67,7 +67,7 @@ class EmoNetAdapter:
   - `a_out = scale_a * a_in + shift_a`
 - Load from checkpoint: `models/calibration/cross_domain_emonet_to_findingemo.pth`
 - Statistical validation ensures calibration improves performance before deployment
-- Outputs aligned to FindingEmo ranges for downstream FE→DEAM scaling
+- Outputs remain in reference space `[-1, 1]`; convert to FindingEmo/DEAM only where required via `EmotionScaleAligner`.
 
 ## Dependencies
 - `face-alignment` (alignment)
