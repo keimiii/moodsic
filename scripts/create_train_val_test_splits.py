@@ -79,9 +79,21 @@ def _print_strata_report(df: pd.DataFrame, bins_per_axis: int, title: str):
     print("  Crosstab (rows=v_bin [-3..3], cols=a_bin [0..6]):")
     print(ct.to_string())
 
+def _detect_project_root() -> Path:
+    """Best-effort detection of the project root (repo top-level).
+
+    Falls back to the parent of this script's directory.
+    """
+    here = Path(__file__).resolve()
+    # repo layout: <root>/scripts/create_train_val_test_splits.py
+    return here.parents[1]
+
+
 def create_splits():
     # Read the processed annotations
-    data_root = Path("/Users/desmondchoy/Projects/emo-rec/data")
+    # Prefer repository-relative data directory to avoid user-specific paths
+    project_root = _detect_project_root()
+    data_root = project_root / "data"
     annotations_file = data_root / "processed_annotations.csv"
     
     print(f"Reading annotations from: {annotations_file}")
