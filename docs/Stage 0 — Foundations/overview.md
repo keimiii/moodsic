@@ -18,7 +18,9 @@ By analyzing facial expressions over time (not just single moments), the system 
 - Runtime pipeline:
   - PERCEIVE: Per-frame valence–arousal from both models with MC Dropout uncertainty.
   - STABILIZE: EMA smoothing; hold values if uncertainty exceeds a threshold.
-  - MATCH: k-NN over 10s DEAM segments (50% overlap) with KD-Tree, k=20; enforce 20–30s minimum dwell.
+  - MATCH (POC default): Song-level matching over DEAM static [1, 9] via simple k-NN
+    (linear scan), with GMM “station” gating from the DEAM clustering notebook;
+    enforce 20–30s minimum dwell and recent-song memory.
 
 ## Course Requirements Coverage
 
@@ -62,18 +64,17 @@ FindingEmo Dataset (25k images with V-A labels)
                 v
     [Trained Emotion Models]
 
-DEAM Dataset (1802 songs with dynamic V-A)
+DEAM Dataset (1802 songs; static V-A used for POC)
                 |
                 v
     +------------------------+
     | Music Preprocessing    |
-    | - 10s segments         |
-    | - 50% overlap          |
-    | - KD-Tree indexing     |
+    | - Song-level V-A (static [1, 9]) |
+    | - Optional (future): 10s segments + KD-Tree |
     +------------------------+
                 |
                 v
-    [Indexed Music Segments]
+    [Indexed Songs (simple table)]
 
 ============================
 [RUNTIME INFERENCE PIPELINE]
@@ -100,15 +101,16 @@ DEAM Dataset (1802 songs with dynamic V-A)
      |
      v
 +------------------------------------------+
-| MATCH: Segment-level retrieval          |
-| - Query per stabilized frame            |
-| - k-NN over 10s DEAM segments          |
+| MATCH: Song-level retrieval (POC)      |
+| - Query per stabilized frame           |
+| - k-NN over DEAM songs (linear scan)   |
+| - GMM station gating (optional)        |
 | - Scale alignment (FE→DEAM)            |
 | - Minimum dwell time (20-30s)          |
 +------------------------------------------+
      |
      v
-[Recommended Music Segments]
+[Recommended Songs]
 ```
 
 ## Phased Implementation Snapshot

@@ -8,9 +8,10 @@
 - Runtime stage naming:
   - PERCEIVE → STABILIZE → MATCH
 
-- Retrieval parameters (defaults from overview):
-  - DEAM segmentation: 10s windows, 50% overlap
-  - k-NN over KD-Tree with `k = 20`
+- Retrieval parameters (POC defaults):
+  - Song-level retrieval using DEAM static `[1, 9]`
+  - Simple k-NN via linear scan; `k = 20` shortlist within selected cluster (if used)
+  - Optional: GMM “station” gating (K≈5) to bias selection
   - Minimum dwell time: 20–30 seconds; maintain recent-song memory to avoid repeats
 
 - Scale alignment:

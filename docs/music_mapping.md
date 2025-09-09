@@ -1,5 +1,9 @@
 ## Current vs. Therapeutic Mapping Approaches
 
+Note: For the academic POC we retrieve at the song level using DEAM static
+annotations `[1, 9]`. Where this page refers to “segments,” read as “songs”
+for the default implementation; segment-level variants remain optional.
+
 ### **Current System: Direct Emotional Matching**
 - **Goal**: Validate current emotional state
 - **Strategy**: Find music with similar valence-arousal values

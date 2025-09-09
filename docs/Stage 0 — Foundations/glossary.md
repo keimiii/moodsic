@@ -14,7 +14,10 @@
 
 - STABILIZE: Exponential Moving Average smoothing with uncertainty gating (hold last stable output when variance exceeds a threshold). Defaults cited for MVP: `alpha = 0.7`, `uncertainty_threshold τ ≈ 0.4`, `n_mc_samples ≈ 5`.
 
-- MATCH: Segment-level retrieval over DEAM with KD-Tree, 10s windows, 50% overlap, k=20; minimum dwell time 20–30s before switching; track recently played songs to ensure variety.
+- MATCH (POC): Song-level retrieval over DEAM static [1, 9] using simple k-NN (linear
+  scan) plus minimum dwell time (20–30s) and recent-song memory. Optional: GMM
+  “station” gating using the DEAM clustering notebook to bias selection toward
+  the most probable mood cluster. Segment-level + KD-Tree is future/optional.
 
 - MC Dropout: Multiple stochastic forward passes with dropout active to estimate prediction uncertainty (mean and variance across samples).
 
@@ -26,7 +29,12 @@
 
 - Dwell time: Minimum duration (≈20–30s) to keep the current music segment before allowing a switch.
 
-- KD-Tree / k-NN: Data structure and method used for fast nearest-neighbor search over DEAM segment valence–arousal space.
+- KD-Tree / k-NN: Acceleration structure for large catalogs. Optional here since
+  the catalog is small; a linear scan suffices for the POC.
+
+- GMM Stations: Gaussian Mixture clusters (K≈5, diag covariance) trained on
+  DEAM song-level valence–arousal (in reference space with StandardScaler).
+  Used to gate or bias retrieval toward the active “mood station.”
 
 - Fusion (variance-weighted): Combine predictions by weighting each by inverse variance; normalized to produce fused prediction and approximate fused variance.
 

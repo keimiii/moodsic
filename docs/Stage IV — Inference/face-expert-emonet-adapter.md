@@ -58,7 +58,8 @@ class EmoNetAdapter:
 - PERCEIVE stage: after MediaPipe selects the primary face, call `adapter.predict(face_crop)`.
 - FUSION: use returned mean and variance for inverse‑variance weighting with the scene model.
 - STABILIZE: use variance for uncertainty gating.
-- MATCH: unchanged; perform FE/DEAM conversions with `EmotionScaleAligner` at this boundary when needed.
+- MATCH (POC): song-level retrieval with FE/DEAM conversions via `EmotionScaleAligner`;
+  optional GMM station gating before simple k-NN.
 
 ## Calibration details
 - Uses trained CrossDomainCalibration PyTorch module for learnable domain bias correction

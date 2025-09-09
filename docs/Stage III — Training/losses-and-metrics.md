@@ -59,7 +59,8 @@ for metric in ['ccc_v', 'ccc_a', 'mae_v', 'mae_a']:
         print(f"✓ {metric}: +{results[metric]['improvement']:.3f} (p={results[metric]['p_value']:.3f})")
 ```
 
-## Retrieval-Stage Metrics
+## Retrieval-Stage Metrics (POC)
 
-- Segment-level emotional distance between query and retrieved segments.
+- Song-level emotional distance between query and retrieved songs.
 - Switching frequency and dwell time distribution to ensure minimum dwell constraints are met.
+- Optional (future): segment-level analyses if dynamic annotations/segmentation are enabled.

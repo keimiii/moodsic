@@ -6,25 +6,27 @@
 - [ ] Document FE→DEAM scaling usage in queries
 
 ## Summary
-- 1,802 songs with dynamic valence–arousal annotations.
-- Used for segment-level retrieval during matching.
+- 1,802 songs. For this academic POC we use the static song-level SAM
+  annotations `[1, 9]` for retrieval.
 
-## Dynamic Annotations
-- Both valence and arousal in range `[-10, 10]`.
-- Example input file referenced: `annotations_dynamic.csv`.
-- Sampling rate used in processing: `2 Hz`.
+## Dynamic Annotations (optional/future)
+- Both valence and arousal in range `[-10, 10]` (per-frame).
+- Example input file: `annotations_dynamic.csv`.
+- Typical sampling rate: `2 Hz`.
 
-## Static Annotations
+## Static Annotations (POC default)
 - Both valence and arousal on a nine-point scale `[1, 9]` (whole 45s excerpt).
-- For this academic POC, we use static annotations `[1, 9]` for retrieval.
+- We retrieve at the song level using these static annotations.
 
-## Segmentation Policy
+## Segmentation Policy (optional/future)
 - Segment length: `10 seconds`.
 - Overlap: `50%`.
-- Metadata stored per segment: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.
+- Metadata per segment: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.
 
 ## Indexing
-- Build KD-Tree over `[valence, arousal]` for fast k-NN.
+- POC default: keep a simple table of songs with static `[valence, arousal]` and do
+  a linear-scan k-NN.
+- Optional: Build KD-Tree over `[valence, arousal]` for fast k-NN when scaling up.
 
 ## FE→DEAM Scaling (for queries)
 - Valence: `v_deam = 1 + (8/6) * (v_fe + 3)`
