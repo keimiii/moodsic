@@ -41,3 +41,13 @@ emo-rec/
 - Real-time video filters
 - Emotion detection interface
 - Fast parallel dataset downloading (25,623 images)
+
+## Testing
+
+See Testing.md for full details. Quick start:
+
+```bash
+source .venv/bin/activate.fish
+uv pip install pytest opencv-python-headless
+pytest -q
+```
