@@ -1,8 +1,8 @@
 # Fusion Strategy
 
-- [ ] Implement variance-weighted fusion (inverse variance weighting)
-- [ ] Provide fallback simple weighted average (defaults: 0.6 scene / 0.4 face)
-- [ ] Handle no-face-detected path gracefully (scene-only)
+- [✅] Implement variance-weighted fusion (inverse variance weighting)
+- [✅] Provide fallback simple weighted average (defaults: 0.6 scene / 0.4 face)
+- [✅] Handle no-face-detected path gracefully (scene-only)
 
 ## Approach
 Combine scene and face predictions via variance-weighted averaging when uncertainty estimates are available. This trusts more confident predictions.
