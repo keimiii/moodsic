@@ -13,8 +13,8 @@
 - EMA alpha: `0.7`
 - Uncertainty threshold τ: `0.4` (demo shows `0.5`)
 - Fusion fixed weights (if not variance-weighted): `scene=0.6`, `face=0.4`
-- DEAM segment window: `10s`, overlap: `0.5`, sampling: `2 Hz`
-- Minimum dwell time: `20–25s`
+- Retrieval (POC): Song-level DEAM static `[1, 9]`; simple k-NN (linear scan)
+- Minimum dwell time: `20–25s`; recent-song memory enabled
 
 ## Learning Rate & Scheduling
 

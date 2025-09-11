@@ -79,11 +79,10 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 
 **STABILIZE**: Applies exponential moving average (EMA) smoothing to prevent jarring jumps. When uncertainty exceeds threshold, holds previous stable values rather than updating.
 
-**MATCH**: Uses k-nearest neighbor (k-NN) search over pre-processed DEAM music segments:
-- DEAM songs divided into 10-second segments with 50% overlap
-- Each segment labeled with average valence-arousal values
-- KD-Tree structure enables fast similarity search
-- Retrieves k=20 nearest segments, selecting best match while avoiding recent repeats
+**MATCH (POC default)**: Song-level matching over DEAM static `[1, 9]` with simple k-NN:
+- One point per song (static SAM annotations); linear-scan distance to query
+- Optional: GMM “station” gating (K≈5, diag) from DEAM clustering notebook
+- Select from top-k nearest while enforcing dwell-time and recent-song memory
 - Enforces 20-30 second minimum play time before switching
 
 ## 2. Course Requirements Coverage
@@ -351,111 +350,57 @@ class SceneEmotionRegressor(nn.Module):
         return mean, variance
 ```
 
-#### Segment-level DEAM Processing
+#### Song-level DEAM Matching (POC default)
 
-The music database requires temporal segmentation to enable dynamic matching with changing emotions. Each song is divided into overlapping segments with aggregated emotion values for efficient retrieval.
+We retrieve at the song level using DEAM static SAM annotations `[1, 9]`. A
+linear-scan k-NN is sufficient at this scale; optional GMM “station” gating
+from the clustering notebook can bias selection toward the active mood region.
 
 ```python
 import time
 import pandas as pd
 import numpy as np
 from collections import deque
-from sklearn.neighbors import KDTree
-
-# FE ranges (confirm in config): V in [-3, 3], A in [0, 6]
-# For this academic POC: use DEAM static scale [1, 9] (per 45s excerpt). Dynamic [-10, 10] also available.
-
 from utils.emotion_scale_aligner import EmotionScaleAligner
-from utils.emotion_pipeline import EmotionPipeline
 
-# Initialize unified scale aligner and optional domain calibration
-aligner = EmotionScaleAligner()
-pipeline = EmotionPipeline(enable_calibration=True)  # Load trained calibration if available
-
-class DEAMSegmentProcessor:
-    def __init__(self, deam_path, window_size=10, overlap=0.5):
-        self.deam_path = deam_path
-        self.window_size = window_size  # seconds
-        self.overlap = overlap
-        self.sampling_rate = 2  # Hz
-        
-    def process_dataset(self):
-        annotations = pd.read_csv(f"{self.deam_path}/annotations_dynamic.csv")
-        segments = []
-        
-        for song_id, song_data in annotations.groupby('song_id'):
-            segments.extend(self._extract_segments(song_id, song_data))
-        
-        segments_df = pd.DataFrame(segments)
-        
-        # Build KD-Tree for fast k-NN in DEAM space
-        self.kd_tree = KDTree(
-            segments_df[['valence', 'arousal']].values
-        )
-        self.segments_metadata = segments_df
-        
-        return segments_df
-    
-    def _extract_segments(self, song_id, song_data):
-        segments = []
-        samples_per_window = self.window_size * self.sampling_rate
-        step_size = int(samples_per_window * (1 - self.overlap))
-        
-        for start_idx in range(0, len(song_data) - samples_per_window, step_size):
-            end_idx = start_idx + samples_per_window
-            window_data = song_data.iloc[start_idx:end_idx]
-            
-            segment = {
-                'song_id': song_id,
-                'start_time': start_idx / self.sampling_rate,
-                'end_time': end_idx / self.sampling_rate,
-                # DEAM dynamic means already in [-10, 10]
-                'valence': window_data['valence'].mean(),
-                'arousal': window_data['arousal'].mean(),
-            }
-            segments.append(segment)
-        
-        return segments
-
-class SegmentMatcher:
+class SongMatcher:
     """
-    Segment-level retriever with FE→DEAM scaling, minimum dwell-time, and
-    simple recent-song avoidance to prevent thrashing.
+    Song-level retriever with FE/reference→DEAM scaling, minimum dwell-time,
+    and recent-song memory. Optional: pass a cluster_id to restrict candidates.
     """
-    def __init__(self, segments_df: pd.DataFrame, min_dwell_time: float = 25.0, recent_k: int = 5):
-        self.segments = segments_df.reset_index(drop=True)
-        self.kd_tree = KDTree(self.segments[["valence", "arousal"]].values)
+    def __init__(self, songs_df: pd.DataFrame, min_dwell_time: float = 25.0, recent_k: int = 5):
+        self.songs = songs_df.reset_index(drop=True)  # columns: song_id, valence, arousal, [cluster]
         self.min_dwell = min_dwell_time
         self.recent_songs = deque(maxlen=recent_k)
         self.current = None
         self.current_start = None
-    
+        self.aligner = EmotionScaleAligner()
+
     def _can_switch(self, now: float) -> bool:
         if self.current is None or self.current_start is None:
             return True
         return (now - self.current_start) >= self.min_dwell
-    
-    def _choose_candidate(self, indices, distances):
-        # Prefer a candidate not in recent_songs
-        for idx, dist in zip(indices[0], distances[0]):
-            row = self.segments.iloc[idx]
-            if row["song_id"] not in self.recent_songs:
-                return row
-        # Fallback: allow repeats if all blocked
-        return self.segments.iloc[indices[0][0]]
-    
-    def recommend(self, v_fe: float, a_fe: float, now: float = None, k: int = 20):
+
+    def recommend_ref(self, v_ref: float, a_ref: float, now: float = None, k: int = 20, cluster_id: int | None = None):
         now = time.time() if now is None else now
-        # Respect dwell-time
         if not self._can_switch(now):
             return self.current
-        
-        # Scale FE→DEAM for query
-        vq, aq = self.aligner.findingemo_to_deam_static(v_fe, a_fe)
-        distances, indices = self.kd_tree.query(np.array([[vq, aq]]), k=k)
-        best = self._choose_candidate(indices, distances)
-        
-        # If new song, start dwell period and track recent songs
+        vq, aq = self.aligner.reference_to_deam_static(v_ref, a_ref)
+        cand = self.songs
+        if cluster_id is not None and 'cluster' in cand.columns:
+            cand = cand[cand['cluster'] == cluster_id]
+        xy = cand[['valence', 'arousal']].to_numpy()
+        d = np.linalg.norm(xy - np.array([vq, aq]), axis=1)
+        top_idx = np.argpartition(d, min(k, len(d)-1))[:k]
+        top = cand.iloc[top_idx]
+        # Prefer a candidate not in recent_songs
+        for idx in top.index:
+            row = cand.loc[idx]
+            if row["song_id"] not in self.recent_songs:
+                best = row
+                break
+        else:
+            best = top.iloc[0]
         if self.current is None or best["song_id"] != self.current["song_id"]:
             self.current = best
             self.current_start = now
@@ -776,7 +721,8 @@ class SceneFaceFusion:
 
 ## 5. Music Matching with Proper Scaling
 
-The matching stage performs frame-level retrieval over DEAM segments with explicit scale alignment between FindingEmo and DEAM emotion spaces.
+The matching stage performs frame-level retrieval over DEAM songs (static [1, 9])
+with explicit scale alignment between FindingEmo and DEAM emotion spaces.
 
 ```python
 class SegmentLevelMusicMatcher:
@@ -959,11 +905,11 @@ The evaluation framework employs carefully selected metrics for each pipeline st
 
 #### Match Stage Metrics
 
-**Segment-Level Emotional Distance** calculates the mean distance between query emotions and retrieved segments at each time point, providing a more granular assessment than whole-video averaging.
+**Song-Level Emotional Distance** calculates the mean distance between query emotions and retrieved songs at each time point. Segment-level distance remains optional for future work.
 
-**Switching Frequency** measures how often the system changes music segments, where excessive switching indicates poor stability while insufficient switching suggests unresponsiveness.
+**Switching Frequency** measures how often the system changes songs, where excessive switching indicates poor stability while insufficient switching suggests unresponsiveness.
 
-**Dwell Time Distribution** analyzes how long each segment plays before switching, ensuring the minimum dwell time prevents jarring transitions while allowing appropriate variety.
+**Dwell Time Distribution** analyzes how long each song plays before switching, ensuring the minimum dwell time prevents jarring transitions while allowing appropriate variety.
 
 ### 7.2 Ablation Studies
 
@@ -977,7 +923,7 @@ This experiment evaluates the stabilization improvements from uncertainty-based 
 
 #### Study 3: Segment-Level vs Whole-Video Retrieval
 
-This study validates the importance of temporal granularity by comparing segment-level k-NN retrieval against whole-video averaging. The evaluation measures emotional alignment accuracy, music variety, and user preference ratings for dynamic versus static matching.
+This study (optional) would compare segment-level vs. song-level retrieval. For the POC, we focus on song-level matching and evaluate alignment accuracy, variety, and user preference.
 
 ---
 
@@ -1202,7 +1148,7 @@ torch==2.0.1            # Deep learning backend
 torchvision==0.15.2     # Vision utilities
 opencv-python==4.8.0    # Video processing
 mediapipe==0.10.0       # Face detection
-scikit-learn==1.3.0     # KD-Tree and metrics
+scikit-learn==1.3.0     # GMM clustering and metrics
 numpy==1.24.3           # Numerical operations
 pandas==2.0.3           # Data manipulation
 gradio==3.50.0          # Demo interface

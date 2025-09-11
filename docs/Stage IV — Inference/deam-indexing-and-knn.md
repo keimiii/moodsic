@@ -1,42 +1,59 @@
-# DEAM Indexing and kNN
+# DEAM Song-Level Matching (POC)
 
-Note: For this academic POC we are using DEAM static annotations `[1, 9]` (whole 45s excerpt) and song-level retrieval. This page documents the optional dynamic-annotation path (per-frame `[-10, 10]`) for future work.
+Default for the academic POC: song-level retrieval using DEAM static
+annotations `[1, 9]` with a simple linear-scan k-NN. KD-Tree and dynamic
+segmentation remain optional for larger catalogs.
 
-- [ ] Segment DEAM into 10s windows with 50% overlap (2 Hz annotations)
-- [ ] Build KD-Tree over segment means in V-A space
-- [ ] Persist `segments_metadata` and KD-Tree for reuse
-- [ ] Validate index quality on sample queries
+- [✅] Keep a dataframe of songs with static `[valence, arousal]` and metadata
+- [✅] Linear-scan k-NN at query time; enforce dwell-time and recent-song memory
+- [✅] Optional GMM “station” gating from the DEAM clustering notebook
+- [ ] Optional: validate shortlist quality on sample queries
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
 
-## Segmentation
-
-- Window size: 10 seconds
-- Overlap: 50% (step = window × 0.5)
-- Labels: mean valence and arousal per window (DEAM dynamic annotations in [-10, 10])
-
-## Indexing
-
-- Build KD-Tree on `[[valence, arousal], ...]` for fast k-NN.
-- Store alongside a dataframe with: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.
-
-## Reference implementation
+## Reference implementation (linear-scan k-NN)
 
 ```python
-class DEAMSegmentProcessor:
-    def __init__(self, deam_path, window_size=10, overlap=0.5):
-        self.deam_path = deam_path
-        self.window_size = window_size
-        self.overlap = overlap
-        self.sampling_rate = 2  # Hz
+import numpy as np
+import pandas as pd
+from utils.emotion_scale_aligner import EmotionScaleAligner
 
-    def process_dataset(self):
-        annotations = pd.read_csv(f"{self.deam_path}/annotations_dynamic.csv")
-        segments = []
-        for song_id, song_data in annotations.groupby('song_id'):
-            segments.extend(self._extract_segments(song_id, song_data))
-        segments_df = pd.DataFrame(segments)
-        self.kd_tree = KDTree(segments_df[['valence', 'arousal']].values)
-        self.segments_metadata = segments_df
-        return segments_df
+class SongMatcher:
+    def __init__(self, songs_df: pd.DataFrame, min_dwell_time: float = 25.0, recent_k: int = 5):
+        self.songs = songs_df.reset_index(drop=True)  # columns: song_id, valence, arousal, [cluster]
+        self.min_dwell = min_dwell_time
+        self.recent_songs = []
+        self.current = None
+        self.current_start = None
+        self.aligner = EmotionScaleAligner()
+
+    def _can_switch(self, now: float) -> bool:
+        return self.current is None or self.current_start is None or (now - self.current_start) >= self.min_dwell
+
+    def recommend(self, v_ref: float, a_ref: float, now: float, k: int = 20, cluster_id: int | None = None):
+        if not self._can_switch(now):
+            return self.current
+        vq, aq = self.aligner.reference_to_deam_static(v_ref, a_ref)
+        cand = self.songs
+        if cluster_id is not None and 'cluster' in cand.columns:
+            cand = cand[cand['cluster'] == cluster_id]
+        xy = cand[['valence', 'arousal']].to_numpy()
+        d = np.linalg.norm(xy - np.array([vq, aq]), axis=1)
+        top_idx = np.argpartition(d, min(k, len(d)-1))[:k]
+        top = cand.iloc[top_idx]
+        # Prefer songs not in recent list
+        top = top[~top['song_id'].isin(self.recent_songs)] or top
+        best = top.iloc[np.argmin(d[top_idx])]
+        if self.current is None or best['song_id'] != self.current['song_id']:
+            self.current = best
+            self.current_start = now
+            self.recent_songs.append(best['song_id'])
+            self.recent_songs = self.recent_songs[-5:]
+        return self.current
 ```
+
+## Optional: Dynamic Segmentation + KD-Tree
+
+- Segment songs into 10s windows (50% overlap) using dynamic annotations `[-10, 10]`.
+- Build a KD-Tree over segment means for fast k-NN when scaling beyond song-level.
+- Maintain segment metadata: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.

@@ -9,7 +9,7 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 
 ## Overview
 
-Three-stage runtime pipeline that converts video frames into music segment recommendations.
+Three-stage runtime pipeline that converts video frames into song recommendations.
 
 ```
 [RUNTIME INFERENCE PIPELINE]
@@ -35,10 +35,11 @@ Three-stage runtime pipeline that converts video frames into music segment recom
      |
      v
 +------------------------------------------+
-| MATCH: Segment-level retrieval          |
-| - Query per stabilized frame            |
-| - k-NN over 10s DEAM segments          |
-| - Scale alignment (FE→DEAM static [1, 9])            |
+| MATCH: Song-level retrieval (POC)      |
+| - Query per stabilized frame           |
+| - Linear-scan k-NN over DEAM static    |
+| - Optional: GMM station gating         |
+| - Scale alignment (FE→DEAM static [1, 9]) |
 | - Minimum dwell time (20-30s)          |
 +------------------------------------------+
      |
@@ -57,8 +58,10 @@ Three-stage runtime pipeline that converts video frames into music segment recom
   - Exponential Moving Average (EMA) over valence/arousal.
   - Uncertainty gating: if variance exceeds threshold, hold last stable values.
 
-- MATCH
-  - Query k-NN over DEAM 10s segments (50% overlap) indexed with KD-Tree.
+- MATCH (POC)
+  - Linear-scan k-NN over DEAM songs using static [1, 9] annotations.
+  - Optional: apply GMM station gating from the DEAM clustering notebook
+    (StandardScaler + GaussianMixture) before k-NN.
   - Enforce minimum dwell time and recent-song avoidance.
   - Use explicit FE→DEAM static [1, 9] scaling for queries.
 
@@ -116,4 +119,4 @@ Scene model integration (later):
 TODO:
 - [ ] Add `utils/runtime_driver.py` with `PerceiveFusionDriver` skeleton.
 - [ ] Connect STABILIZE (EMA + uncertainty gating) after `step()`.
-- [ ] Connect MATCH (DEAM scaling + k-NN retrieval) after stabilization.
+- [ ] Connect MATCH (DEAM scaling + linear-scan k-NN; optional GMM gating) after stabilization.
