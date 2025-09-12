@@ -40,7 +40,7 @@ Stability: jitter_reduction=...%, gating_freq=...
 
 - Scene-only vs Face-enhanced (CCC improvement, divergence reduction, multi-person scenes).
 - EMA vs EMA+Uncertainty Gating (jitter reduction, gating false positives).
-- Segment-level vs Whole-video retrieval (alignment accuracy, variety, user preference).
+- Station gating ablations (top-1 vs top-2 threshold 0.55; impact on alignment, variety, user preference).
 
 ## Best Models Summary
 

@@ -1,8 +1,7 @@
 ## Current vs. Therapeutic Mapping Approaches
 
 Note: For the academic POC we retrieve at the song level using DEAM static
-annotations `[1, 9]`. Where this page refers to “segments,” read as “songs”
-for the default implementation; segment-level variants remain optional.
+annotations `[1, 9]`.
 
 ### **Current System: Direct Emotional Matching**
 - **Goal**: Validate current emotional state
@@ -84,7 +83,7 @@ def _gradual_improvement(self, current_v, current_a, quadrant):
         target_v = current_v + 0.2  # Maintain high valence
         target_a = current_a + 0.6  # Increase arousal
         
-    # Find music segments closest to target emotional state
+    # Find songs closest to target emotional state
     v_deam, a_deam = self.aligner.findingemo_to_deam_static(target_v, target_a)
     return self._find_therapeutic_segment(v_deam, a_deam)
 ```
@@ -129,16 +128,16 @@ def _opposite_emotion(self, current_v, current_a, quadrant):
 
 ## Implementation in the Current Architecture
 
-### **Enhanced SegmentMatcher Class**
+### **Enhanced SongMatcher Class**
 
 ```python
 from utils.emotion_scale_aligner import EmotionScaleAligner
 
-class TherapeuticSegmentMatcher(SegmentMatcher):
-    def __init__(self, segments_df, min_dwell_time=25.0, recent_k=5):
-        super().__init__(segments_df, min_dwell_time, recent_k)
+class TherapeuticSongMatcher(SongMatcher):
+    def __init__(self, songs_df, min_dwell_time=25.0, recent_k=5):
+        super().__init__(songs_df, min_dwell_time, recent_k)
         self.aligner = EmotionScaleAligner()
-        self.therapeutic_mapper = TherapeuticMusicMapper(segments_df)
+        self.therapeutic_mapper = TherapeuticMusicMapper(songs_df)
         self.improvement_progress = 0.0  # Track improvement over time
         self.target_emotions = None
         
@@ -149,11 +148,13 @@ class TherapeuticSegmentMatcher(SegmentMatcher):
         # Scale to DEAM space using unified aligner
         v_deam, a_deam = self.aligner.findingemo_to_deam_static(therapeutic_v, therapeutic_a)
         
-        # Find segments closest to therapeutic target
-        distances, indices = self.kd_tree.query([[v_deam, a_deam]], k=20)
+        # Find songs closest to therapeutic target via linear scan
+        xy = self.songs[["valence", "arousal"]].to_numpy()
+        d = np.linalg.norm(xy - np.array([v_deam, a_deam]), axis=1)
+        indices = np.argsort(d)[:20]
         
         # Apply therapeutic filtering (avoid triggering negative emotions)
-        filtered_candidates = self._filter_therapeutic_candidates(indices, distances, v_fe, a_fe)
+        filtered_candidates = self._filter_therapeutic_candidates(indices, d[indices], v_fe, a_fe)
         
         return self._choose_candidate(filtered_candidates)
     

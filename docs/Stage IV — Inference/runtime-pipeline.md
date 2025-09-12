@@ -37,14 +37,15 @@ Three-stage runtime pipeline that converts video frames into song recommendation
 +------------------------------------------+
 | MATCH: Song-level retrieval (POC)      |
 | - Query per stabilized frame           |
+| - GMM station gating (predict_proba)   |
+|   - If top posterior < 0.55 → top-2    |
 | - Linear-scan k-NN over DEAM static    |
-| - Optional: GMM station gating         |
 | - Scale alignment (FE→DEAM static [1, 9]) |
 | - Minimum dwell time (20-30s)          |
 +------------------------------------------+
      |
      v
-[Recommended Music Segments]
+[Recommended Songs]
 ```
 
 ## Stage details
