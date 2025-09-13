@@ -24,6 +24,13 @@ Notes for newcomers:
 - Variance reflects uncertainty per dimension; lower variance means higher
   confidence and thus higher weight in inverse-variance fusion.
 - We use simple mocks so tests are fast and do not require ML dependencies.
+
+New in this suite (stability guardrails):
+- Optional "gating" that temporarily ignores the face path for a frame to avoid
+  jitter when the face is unreliable (occluded/low light):
+  - Gate by face score (low detector confidence)
+  - Gate by sigma (uncertainty too high)
+  - Gate by brightness (frame too dark)
 """
 
 from __future__ import annotations
@@ -230,7 +237,7 @@ def test_perceive_and_fuse_both_paths_inverse_variance():
 def test_fallback_to_scene_when_no_face_detected_with_real_image():
     """Uses a real image (if present) to exercise the face-missing fallback path."""
 
-    import cv2
+    cv2 = pytest.importorskip("cv2")
 
     img_path = os.path.join(
         "data",
@@ -260,3 +267,156 @@ def test_fallback_to_scene_when_no_face_detected_with_real_image():
     assert pytest.approx(res.fused.arousal) == -0.1
     assert pytest.approx(res.fused.var_valence) == 0.04
     assert pytest.approx(res.fused.var_arousal) == 0.09
+
+
+# ---- New unit tests: stability guardrails (gating) -------------------------
+
+class MockFaceProcessorWithScore:
+    """Face processor that always returns a face crop with a configurable score."""
+
+    def __init__(self, score: float = 0.9):
+        self.score = float(score)
+
+    def extract_primary_face(self, frame_bgr: np.ndarray):
+        crop = np.zeros((224, 224, 3), dtype=np.uint8) + 255
+        bbox = (5, 5, 40, 40)
+        return crop, bbox, self.score
+
+
+def test_gating_by_face_score_disables_unreliable_face():
+    """When face score is below threshold, fusion falls back to scene output."""
+
+    scene = MockScenePredictor(0.4, -0.2, 0.04, 0.09)
+    # Face would otherwise pull result away from scene
+    face_exp = MockFaceExpert(-0.8, 0.9, 0.01, 0.02)
+    face_proc = MockFaceProcessorWithScore(score=0.2)
+
+    fusion = SceneFaceFusion(
+        scene_predictor=scene,
+        face_expert=face_exp,
+        face_processor=face_proc,
+        use_variance_weighting=True,
+        face_score_threshold=0.5,  # gate off low-score faces
+    )
+    frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    res = fusion.perceive_and_fuse(frame)
+
+    # Fused should equal scene since face was gated invalid
+    assert pytest.approx(res.fused.valence) == 0.4
+    assert pytest.approx(res.fused.arousal) == -0.2
+
+
+# ---- New unit tests: post-fusion EMA stabilizer ---------------------------
+
+class MockScenePredictorSeq:
+    """Scene predictor that yields a sequence of (v,a,var_v,var_a) per call."""
+
+    def __init__(self, seq):
+        self.seq = list(seq)
+
+    def predict(self, frame_bgr: np.ndarray, tta: int = 10):
+        if not self.seq:
+            # repeat last if exhausted
+            v, a, vv, va = 0.0, 0.0, 0.01, 0.01
+        else:
+            v, a, vv, va = self.seq.pop(0)
+        return float(v), float(a), (vv, va)
+
+
+def test_stabilizer_holds_on_high_fused_variance():
+    """EMA stabilizer should hold last stable values when variance spikes."""
+
+    # Sequence: stable low-var → spike high-var → back to low-var
+    seq = [
+        (0.0, 0.0, 0.01, 0.01),  # initialize EMA and last_stable
+        (0.8, 0.8, 1.0, 1.0),     # high variance → hold last_stable (0.0, 0.0)
+        (0.4, 0.4, 0.01, 0.01),  # low variance → EMA update from previous EMA
+    ]
+    scene = MockScenePredictorSeq(seq)
+    fusion = SceneFaceFusion(
+        scene_predictor=scene,
+        enable_stabilizer=True,
+        stabilizer_alpha=0.5,
+        uncertainty_threshold=0.4,
+    )
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    res1 = fusion.perceive_and_fuse(frame)
+    assert pytest.approx(res1.fused.valence) == 0.0
+    assert pytest.approx(res1.fused.arousal) == 0.0
+
+    res2 = fusion.perceive_and_fuse(frame)
+    # Despite input 0.8 with high variance, output should hold at last stable (0.0)
+    assert pytest.approx(res2.fused.valence) == 0.0
+    assert pytest.approx(res2.fused.arousal) == 0.0
+
+    res3 = fusion.perceive_and_fuse(frame)
+    # Now low variance; EMA updates were applied even during the gated step,
+    # so prior EMA is 0.4. With input 0.4 and alpha=0.5, EMA stays at 0.4.
+    assert pytest.approx(res3.fused.valence, rel=1e-6) == 0.4
+    assert pytest.approx(res3.fused.arousal, rel=1e-6) == 0.4
+
+
+def test_stability_metrics_present_when_enabled():
+    """FusionResult should include stability metrics when stabilizer is enabled."""
+
+    scene = MockScenePredictorSeq([
+        (0.0, 0.0, 0.01, 0.01),
+        (0.1, 0.1, 0.01, 0.01),
+        (0.2, 0.2, 0.01, 0.01),
+    ])
+    fusion = SceneFaceFusion(scene_predictor=scene, enable_stabilizer=True)
+    frame = np.zeros((4, 4, 3), dtype=np.uint8)
+    _ = fusion.perceive_and_fuse(frame)
+    res = fusion.perceive_and_fuse(frame)
+    # After two frames, metrics should be available
+    assert res.stability_variance is None or (
+        isinstance(res.stability_variance, tuple) and len(res.stability_variance) == 2
+    )
+    assert res.stability_jitter is None or (
+        isinstance(res.stability_jitter, tuple) and len(res.stability_jitter) == 2
+    )
+
+
+def test_gating_by_sigma_disables_high_uncertainty_face():
+    """When face sigma is too large, face is ignored in favor of scene."""
+
+    scene = MockScenePredictor(0.1, 0.1, 0.04, 0.04)
+    # Large variance → sigma ~ 1.0 > threshold below
+    face_exp = MockFaceExpert(-1.0, 1.0, 1.0, 1.0)
+    face_proc = MockFaceProcessorWithScore(score=0.9)
+
+    fusion = SceneFaceFusion(
+        scene_predictor=scene,
+        face_expert=face_exp,
+        face_processor=face_proc,
+        use_variance_weighting=True,
+        face_max_sigma=0.5,  # gate off faces with sigma > 0.5
+    )
+    frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    res = fusion.perceive_and_fuse(frame)
+
+    assert pytest.approx(res.fused.valence) == 0.1
+    assert pytest.approx(res.fused.arousal) == 0.1
+
+
+def test_gating_by_brightness_disables_face_on_dark_frames():
+    """On dark frames (low luma), face is ignored for stability."""
+
+    scene = MockScenePredictor(0.2, -0.2, 0.04, 0.04)
+    face_exp = MockFaceExpert(-0.9, 0.9, 0.01, 0.01)
+    face_proc = MockFaceProcessorWithScore(score=0.9)
+
+    fusion = SceneFaceFusion(
+        scene_predictor=scene,
+        face_expert=face_exp,
+        face_processor=face_proc,
+        use_variance_weighting=True,
+        brightness_threshold=10.0,  # black frame has luma=0 < 10 → gate face
+    )
+    # Pure black image
+    dark = np.zeros((64, 64, 3), dtype=np.uint8)
+    res = fusion.perceive_and_fuse(dark)
+
+    assert pytest.approx(res.fused.valence) == 0.2
+    assert pytest.approx(res.fused.arousal) == -0.2

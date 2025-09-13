@@ -10,6 +10,13 @@ Combine scene and face predictions via variance-weighted averaging when uncertai
 - Primary: inverse-variance weighting
 - Fallback: fixed linear combination (`scene_weight = 0.6`, `face_weight = 0.4`)
 - If no face is detected, use scene prediction as-is
+- Fused variance is defined only under inverse-variance weighting; in
+  fixed-weight fallback we do not propagate variance (treat as unknown/None).
+- Default sampling: `scene_mc_samples = 5`, `face_tta = 5`.
+
+Guardrails (optional): The fusion module supports optional gating of the face
+path by detection score, per-dimension sigma, and frame brightness. See
+`uncertainty-and-gating.md` for recommended thresholds and rationale.
 
 ## Reference Implementation
 
@@ -39,13 +46,17 @@ class SceneFaceFusion:
                 final_pred, final_var = self._variance_weighted_fusion(scene_mean, scene_var, face_mean, face_var)
             else:
                 final_pred = self.scene_weight * scene_mean + self.face_weight * face_mean
-                final_var = self.scene_weight * scene_var + self.face_weight * face_var
+                # In fixed-weight fallback we leave variance unset (None)
+                final_var = None
         else:
             final_pred, final_var = scene_mean, scene_var
 
         v = final_pred[0].item()
         a = final_pred[1].item()
-        var = (final_var[0].item(), final_var[1].item())
+        if final_var is None:
+            var = (None, None)
+        else:
+            var = (final_var[0].item(), final_var[1].item())
         return v, a, var
 
     def _variance_weighted_fusion(self, pred1, var1, pred2, var2):
@@ -75,3 +86,8 @@ class SceneFaceFusion:
 
 ## Notes
 - Divergence monitoring (scene vs. face) can be computed downstream for analysis
+
+Note: In the codebase, the public API is `perceive_and_fuse(frame_bgr) ->
+FusionResult`, which exposes per-path predictions and the fused result along
+with optional stabilizer metrics. The fusion math and fallbacks here match the
+implementation.
