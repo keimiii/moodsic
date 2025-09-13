@@ -843,27 +843,6 @@ class PhaseTrainer:
     
     # Face training is not used: EmoNet is the face expert and remains fixed (no training).
     
-    def optimize_fusion_weights(self, scene_model, face_model, val_data):
-        # Grid search for optimal fusion weights
-        best_weights = None
-        best_score = float('inf')
-        
-        for scene_w in np.arange(0.3, 0.8, 0.1):
-            face_w = 1 - scene_w
-            
-            fusion = SceneFaceFusion(scene_model, face_model, SingleFaceProcessor())
-            fusion.scene_weight = scene_w
-            fusion.face_weight = face_w
-            
-            # Evaluate on validation set
-            val_loss = self._evaluate_fusion(fusion, val_data)
-            
-            if val_loss < best_score:
-                best_score = val_loss
-                best_weights = (scene_w, face_w)
-        
-        return best_weights
-    
     def _combined_loss(self, pred, target):
         # 70% CCC + 30% MSE
         ccc_loss = 2 - self._ccc(pred[:, 0], target[:, 0]) - self._ccc(pred[:, 1], target[:, 1])

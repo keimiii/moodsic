@@ -3,7 +3,7 @@
 - [✅] Define Phase 0/1/2 training flow (freeze → unfreeze; face; fusion)
 - [ ] Implement dataloaders for scene dataset (face path uses EmoNet; no face dataloaders needed)
 - [ ] Run LR finder per phase and record selected LRs
-- [ ] Validate fusion on held-out set and store final weights
+- [ ] Validate fusion baseline on held-out set
 
 ## Phase 0 — Scene Baseline
 
@@ -59,21 +59,12 @@ else:
     print("✗ No significant improvement - use without calibration")
 ```
 
-## Phase 2 — Fusion Optimization
+## Phase 2 — Fusion Integration
 
-- Combine scene and face via variance-weighted averaging; optionally tune fixed weights on validation set.
+- Combine scene and face via variance-weighted averaging.
 
 ```python
-def optimize_fusion_weights(self, scene_model, face_expert, val_data):
-    best_weights, best_score = None, float('inf')
-    for scene_w in np.arange(0.3, 0.8, 0.1):
-        face_w = 1 - scene_w
-        fusion = SceneFaceFusion(scene_model, face_expert, SingleFaceProcessor())
-        fusion.scene_weight, fusion.face_weight = scene_w, face_w
-        val_loss = self._evaluate_fusion(fusion, val_data)
-        if val_loss < best_score:
-            best_score, best_weights = val_loss, (scene_w, face_w)
-    return best_weights
+# No fixed-weight search; use inverse-variance fusion as the baseline.
 ```
 
 ## Stabilization During Training/Eval

@@ -1,7 +1,7 @@
 # Hyperparameters
 
 - [✅] Seed defaults for MVP
-- [ ] Sweep α (EMA), τ (gating), fusion weights
+- [ ] Sweep α (EMA) and τ (gating)
 - [ ] Record LR finder outputs and chosen LR per phase
 - [ ] Confirm dropout rates and MC sampling count
 
@@ -26,7 +26,6 @@
 
 ## Sweep Ranges
 
-- Fusion weight search: `scene_w ∈ {0.3, 0.4, 0.5, 0.6, 0.7}`, `face_w = 1 - scene_w`.
 - EMA alpha: `0.5–0.8`.
 - Uncertainty τ: `0.3–0.7`.
 - MC samples: `3–10` (compute-bound).

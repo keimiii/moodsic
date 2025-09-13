@@ -3,7 +3,6 @@
 - [ ] Implement variance-weighted fusion (inverse variance weighting)
 - [ ] Provide fallback simple weighted average (defaults: 0.6 scene / 0.4 face)
 - [ ] Handle no-face-detected path gracefully (scene-only)
-- [ ] Optional grid search to optimize fusion weights on validation
 
 ## Approach
 Combine scene and face predictions via variance-weighted averaging when uncertainty estimates are available. This trusts more confident predictions.
@@ -76,4 +75,3 @@ class SceneFaceFusion:
 
 ## Notes
 - Divergence monitoring (scene vs. face) can be computed downstream for analysis
-- Weight optimization can be performed via grid search over validation data
