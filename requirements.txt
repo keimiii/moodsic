@@ -54,3 +54,5 @@ torchvision==0.23.0
 findingemo-light
 aiohttp
 aiofiles
+pytest
+opencv-python-headless

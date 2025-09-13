@@ -36,13 +36,20 @@ face = face_processor.extract_primary_face(bgr_frame)  # None if not found
 
 ## SceneFaceFusion
 - Input: raw BGR frame `np.ndarray`
-- Output: `(valence: float, arousal: float, variance: (float, float))`
+- Output: `FusionResult` with fields:
+  - `scene: Optional[EmotionPrediction]`
+  - `face: Optional[EmotionPrediction]`
+  - `fused: EmotionPrediction` (fields: `valence`, `arousal`, `var_valence`, `var_arousal`)
+  - optional `face_bbox`, `face_score`, and stability metrics when enabled
 - Behavior:
-  - If face not detected → returns scene prediction and variance
-  - If `use_variance_weighting` → inverse-variance fusion; else fixed weights (defaults 0.6/0.4)
+  - If face not detected → falls back to scene prediction (and variance)
+  - If `use_variance_weighting` → inverse-variance fusion; else fixed weights (defaults 0.6/0.4).
+    In fixed-weight fallback, fused variance may be unset (None).
 
 ```python
-v, a, (v_var, a_var) = fusion.predict(frame, use_variance_weighting=True, n_mc_samples=5)
+res = fusion.perceive_and_fuse(frame_bgr)
+v, a = res.fused.valence, res.fused.arousal
+v_var, a_var = res.fused.var_valence, res.fused.var_arousal  # may be None in fallback
 ```
 
 ## Stabilizer (AdaptiveStabilizer)

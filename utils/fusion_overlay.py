@@ -3,7 +3,10 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-import cv2
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - handle environments without OpenCV
+    cv2 = None  # type: ignore
 import numpy as np
 
 try:
@@ -19,10 +22,12 @@ def draw_fusion_overlay(img: np.ndarray, result: FusionResult) -> np.ndarray:
 
     - Does not perform inference; expects a FusionResult from SceneFaceFusion.
     - Draws face bbox if present, plus text lines with valence/arousal and
-      uncertainties when available.
+      uncertainties when available. We show σ (sigma) as the square root of
+      variance — larger σ means less confidence.
     - Returns a new image; original is not modified.
     """
-    if img is None or img.ndim != 3 or img.shape[2] != 3:
+    # If OpenCV is unavailable or the image is not a standard BGR frame, return input
+    if cv2 is None or img is None or img.ndim != 3 or img.shape[2] != 3:
         return img
 
     out = img.copy()
@@ -90,4 +95,3 @@ def draw_fusion_overlay(img: np.ndarray, result: FusionResult) -> np.ndarray:
 
 
 __all__ = ["draw_fusion_overlay"]
-
