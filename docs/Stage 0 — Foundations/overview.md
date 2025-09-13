@@ -70,7 +70,6 @@ DEAM Dataset (1802 songs; static V-A used for POC)
     +------------------------+
     | Music Preprocessing    |
     | - Song-level V-A (static [1, 9]) |
-    | - Optional (future): 10s segments + KD-Tree |
     +------------------------+
                 |
                 v
@@ -103,8 +102,9 @@ DEAM Dataset (1802 songs; static V-A used for POC)
 +------------------------------------------+
 | MATCH: Song-level retrieval (POC)      |
 | - Query per stabilized frame           |
+| - GMM station gating (predict_proba)   |
+|   - If top posterior < 0.55 → top-2    |
 | - k-NN over DEAM songs (linear scan)   |
-| - GMM station gating (optional)        |
 | - Scale alignment (FE→DEAM)            |
 | - Minimum dwell time (20-30s)          |
 +------------------------------------------+

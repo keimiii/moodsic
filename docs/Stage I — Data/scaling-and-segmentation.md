@@ -22,12 +22,14 @@ v_deam, a_deam = aligner.findingemo_to_deam_static(v_fe, a_fe)
 - FE ranges: Valence `[-3, 3]`, Arousal `[0, 6]` → DEAM static ranges `[1, 9]`.
 - All conversions maintain consistency and handle edge cases automatically.
 
-## DEAM Segmentation (optional/future)
-- Window size: `10s`
-- Overlap: `50%`
-- Sampling rate used: `2 Hz`
-- Optional indexing: KD-Tree over segment means.
-- Persist segment metadata: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.
+## GMM Station Gating (Song-Level)
+- Train a `StandardScaler` and `GaussianMixture(K≈5, covariance_type='diag')` on
+  DEAM song-level valence–arousal in reference space `[-1, 1]`.
+- At runtime, transform stabilized `(v_ref, a_ref)` with the scaler and use
+  `predict_proba` for soft posteriors.
+- If the top posterior is < 0.55, widen the gate to include the top-2 clusters.
+- Within the selected cluster set, rank songs by Euclidean distance between the
+  stabilized V/A and each song’s song-level V/A; select top-1 (or top-N).
 
 ## Cluster-Gated Song Selection (from notebook)
 - Train a `StandardScaler` and `GaussianMixture(K≈5, covariance_type='diag')` on

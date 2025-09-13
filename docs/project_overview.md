@@ -226,13 +226,12 @@ DEAM Dataset (1802 songs with dynamic V-A)
                 v
     +------------------------+
     | Music Preprocessing    |
-    | - 10s segments         |
-    | - 50% overlap          |
-    | - KD-Tree indexing     |
+    | - Song-level V-A (static [1, 9]) |
+    | - Optional tags/metadata         |
     +------------------------+
                 |
                 v
-    [Indexed Music Segments]
+    [Indexed Songs]
 
 ============================
 [RUNTIME INFERENCE PIPELINE]
@@ -259,15 +258,17 @@ DEAM Dataset (1802 songs with dynamic V-A)
      |
      v
 +------------------------------------------+
-| MATCH: Segment-level retrieval          |
+| MATCH: Song-level retrieval             |
 | - Query per stabilized frame            |
-| - k-NN over 10s DEAM segments          |
-| - Scale alignment (FE→DEAM)            |
-| - Minimum dwell time (20-30s)          |
+| - GMM station gating (predict_proba)    |
+|   - If top posterior < 0.55 → top-2     |
+| - k-NN over DEAM songs (linear scan)    |
+| - Scale alignment (FE→DEAM)             |
+| - Minimum dwell time (20-30s)           |
 +------------------------------------------+
      |
      v
-[Recommended Music Segments]
+[Recommended Songs]
 ```
 
 ---
@@ -725,33 +726,32 @@ The matching stage performs frame-level retrieval over DEAM songs (static [1, 9]
 with explicit scale alignment between FindingEmo and DEAM emotion spaces.
 
 ```python
-class SegmentLevelMusicMatcher:
+class SongLevelMusicMatcher:
     def __init__(self, deam_processor):
         self.processor = deam_processor
-        self.segments = deam_processor.segments_metadata
-        self.kd_tree = deam_processor.kd_tree
+        self.songs = deam_processor.songs_metadata  # columns: song_id, valence, arousal
         
         # Track recently played to ensure variety
         self.recent_songs = deque(maxlen=10)
-        self.current_segment = None
-        self.segment_start_time = None
+        self.current_song = None
+        self.song_start_time = None
         self.min_dwell_time = 20  # seconds
         
     def get_music_for_frame(self, valence, arousal, current_time):
         # Scale from FindingEmo to DEAM static [1, 9] space
         v_deam, a_deam = self._scale_fe_to_deam_static(valence, arousal)
         
-        # Check if we should switch segments
-        if self._should_switch_segment(current_time):
-            # Find new segment
-            new_segment = self._find_best_segment(v_deam, a_deam)
+        # Check if we should switch songs
+        if self._should_switch_song(current_time):
+            # Find new song
+            new_song = self._find_best_song(v_deam, a_deam)
             
-            if new_segment is not None:
-                self.current_segment = new_segment
-                self.segment_start_time = current_time
-                self.recent_songs.append(new_segment['song_id'])
+            if new_song is not None:
+                self.current_song = new_song
+                self.song_start_time = current_time
+                self.recent_songs.append(new_song['song_id'])
         
-        return self.current_segment
+        return self.current_song
     
     def __init__(self, deam_processor):
         self.processor = deam_processor
@@ -762,34 +762,36 @@ class SegmentLevelMusicMatcher:
         # Use unified aligner for FindingEmo → DEAM static conversion
         return self.aligner.findingemo_to_deam_static(valence, arousal)
     
-    def _should_switch_segment(self, current_time):
+    def _should_switch_song(self, current_time):
         # Switch only after minimum dwell time
-        if self.current_segment is None:
+        if self.current_song is None:
             return True
         
-        time_in_segment = current_time - self.segment_start_time
-        return time_in_segment >= self.min_dwell_time
+        time_in_song = current_time - self.song_start_time
+        return time_in_song >= self.min_dwell_time
     
-    def _find_best_segment(self, valence, arousal, k=20):
-        # Query k nearest segments
-        query = np.array([[valence, arousal]])
-        distances, indices = self.kd_tree.query(query, k=k)
+    def _find_best_song(self, valence, arousal, k=20):
+        # Linear-scan k nearest songs
+        xy = self.songs[["valence", "arousal"]].to_numpy()
+        d = np.linalg.norm(xy - np.array([valence, arousal]), axis=1)
+        indices = np.argsort(d)[:k]
+        distances = d[indices]
         
         # Filter out recently played songs
         candidates = []
         for idx, dist in zip(indices[0], distances[0]):
-            segment = self.segments.iloc[idx]
-            if segment['song_id'] not in self.recent_songs:
-                candidates.append((segment, dist))
+            song = self.songs.iloc[idx]
+            if song['song_id'] not in self.recent_songs:
+                candidates.append((song, dist))
         
         if not candidates:
             # All songs recently played, allow repetition but pick furthest
-            candidates = [(self.segments.iloc[idx], dist) 
-                         for idx, dist in zip(indices[0], distances[0])]
+            candidates = [(self.songs.iloc[idx], dist) 
+                         for idx, dist in zip(indices, distances)]
         
         # Return best candidate
-        best_segment, _ = min(candidates, key=lambda x: x[1])
-        return best_segment.to_dict()
+        best_song, _ = min(candidates, key=lambda x: x[1])
+        return best_song.to_dict()
 ```
 
 ---
@@ -905,7 +907,7 @@ The evaluation framework employs carefully selected metrics for each pipeline st
 
 #### Match Stage Metrics
 
-**Song-Level Emotional Distance** calculates the mean distance between query emotions and retrieved songs at each time point. Segment-level distance remains optional for future work.
+**Song-Level Emotional Distance** calculates the mean distance between query emotions and retrieved songs at each time point.
 
 **Switching Frequency** measures how often the system changes songs, where excessive switching indicates poor stability while insufficient switching suggests unresponsiveness.
 
@@ -921,16 +923,16 @@ This study quantifies the improvement from incorporating EmoNet by comparing Pha
 
 This experiment evaluates the stabilization improvements from uncertainty-based gating by comparing simple EMA against EMA with MC Dropout uncertainty gating. Metrics include jitter reduction, false positive gating events, and user experience ratings on recommendation stability.
 
-#### Study 3: Segment-Level vs Whole-Video Retrieval
+#### Study 3: Station Gating vs Ungated Retrieval
 
-This study (optional) would compare segment-level vs. song-level retrieval. For the POC, we focus on song-level matching and evaluate alignment accuracy, variety, and user preference.
+This study compares station-gated retrieval (GMM top-1; widen to top-2 if top posterior < 0.55) against ungated global k-NN. For the POC, we focus on song-level matching and evaluate alignment accuracy, variety, and user preference.
 
 ---
 
 ## 8. Implementation Timeline
 
 ### Week 1: Foundation (Phase 0)
-- **Days 1-2:** Dataset preparation, DEAM segmentation with 10s windows
+- **Days 1-2:** Dataset preparation, DEAM song-level table
 - **Day 3:** Scene model training with CLIP/ViT backbone
 - **Day 3:** Implement EMA with uncertainty gating
 
@@ -983,7 +985,7 @@ class EmotionMusicDemo:
         self.face_processor = SingleFaceProcessor()
         self.fusion = SceneFaceFusion(self.scene_model, self.face_model, self.face_processor)
         self.stabilizer = AdaptiveStabilizer(alpha=0.7, uncertainty_threshold=0.5)
-        self.matcher = SegmentLevelMusicMatcher(DEAMSegmentProcessor('./deam_data'))
+        self.matcher = SongLevelMusicMatcher(DEAMSongProcessor('./deam_data'))
         
     def process_video(self, video_path, show_face_crops=True):
         cap = cv2.VideoCapture(video_path)
@@ -991,7 +993,7 @@ class EmotionMusicDemo:
         
         results = {
             'emotion_timeline': [],
-            'music_segments': [],
+            'songs': [],
             'face_crops': [] if show_face_crops else None,
             'metrics': {
                 'face_detection_rate': 0,
@@ -1030,7 +1032,7 @@ class EmotionMusicDemo:
                 v_stable, a_stable = self.stabilizer.update(valence, arousal, variance)
                 
                 # Get music recommendation
-                segment = self.matcher.get_music_for_frame(v_stable, a_stable, current_time)
+                song = self.matcher.get_music_for_frame(v_stable, a_stable, current_time)
                 
                 # Record results
                 results['emotion_timeline'].append({
@@ -1042,12 +1044,12 @@ class EmotionMusicDemo:
                     'variance': variance
                 })
                 
-                if segment and (not results['music_segments'] or 
-                              results['music_segments'][-1]['song_id'] != segment['song_id']):
-                    results['music_segments'].append({
+                if song and (not results['songs'] or 
+                              results['songs'][-1]['song_id'] != song['song_id']):
+                    results['songs'].append({
                         'start_time': current_time,
-                        'song_id': segment['song_id'],
-                        'segment_info': segment
+                        'song_id': song['song_id'],
+                        'song_info': song
                     })
             
             frame_count += 1
@@ -1086,10 +1088,10 @@ class EmotionMusicDemo:
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
         
-        # Music segments
-        for segment in results['music_segments']:
-            axes[2].axvline(x=segment['start_time'], color='g', linestyle='--', alpha=0.5)
-            axes[2].text(segment['start_time'], 0.5, segment['song_id'][:10], 
+        # Songs timeline
+        for song in results['songs']:
+            axes[2].axvline(x=song['start_time'], color='g', linestyle='--', alpha=0.5)
+            axes[2].text(song['start_time'], 0.5, song['song_id'][:10], 
                         rotation=45, fontsize=8)
         
         axes[2].set_xlabel('Time (seconds)')
@@ -1108,7 +1110,7 @@ class EmotionMusicDemo:
             Face Detection Rate: {results['metrics']['face_detection_rate']:.2%}
             Emotion Stability: V={results['metrics']['stability']['variance'][0]:.3f}, 
                              A={results['metrics']['stability']['variance'][1]:.3f}
-            Music Segments: {len(results['music_segments'])}
+            Songs: {len(results['songs'])}
             """
             
             return fig, metrics_text, results
@@ -1117,7 +1119,7 @@ class EmotionMusicDemo:
             fn=process_and_visualize,
             inputs=gr.Video(label="Upload Video"),
             outputs=[
-                gr.Plot(label="Emotion Timeline & Music Segments"),
+                gr.Plot(label="Emotion Timeline & Songs"),
                 gr.Textbox(label="Performance Metrics"),
                 gr.JSON(label="Detailed Results")
             ],
@@ -1192,4 +1194,4 @@ Notes:
 
 This architecture provides a robust emotion-aware music recommendation system that addresses the critical risks of context overfitting and prediction instability through a carefully phased implementation. The system leverages transfer learning for efficiency while incorporating targeted enhancements that ensure predictions are grounded in facial expressions and temporally stable.
 
-The phased approach enables incremental development with clear validation at each stage, allowing the team to achieve a functional baseline quickly while progressively adding sophistication. The explicit handling of scale alignment, uncertainty estimation, and segment-level retrieval ensures the system delivers meaningful music recommendations that respond appropriately to emotional changes in video content.
+The phased approach enables incremental development with clear validation at each stage, allowing the team to achieve a functional baseline quickly while progressively adding sophistication. The explicit handling of scale alignment, uncertainty estimation, and station-gated song-level retrieval ensures the system delivers meaningful music recommendations that respond appropriately to emotional changes in video content.

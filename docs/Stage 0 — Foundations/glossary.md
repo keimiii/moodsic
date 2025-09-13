@@ -14,10 +14,8 @@
 
 - STABILIZE: Exponential Moving Average smoothing with uncertainty gating (hold last stable output when variance exceeds a threshold). Defaults cited for MVP: `alpha = 0.7`, `uncertainty_threshold τ ≈ 0.4`, `n_mc_samples ≈ 5`.
 
-- MATCH (POC): Song-level retrieval over DEAM static [1, 9] using simple k-NN (linear
-  scan) plus minimum dwell time (20–30s) and recent-song memory. Optional: GMM
-  “station” gating using the DEAM clustering notebook to bias selection toward
-  the most probable mood cluster. Segment-level + KD-Tree is future/optional.
+- MATCH (POC): Song-level retrieval over DEAM static [1, 9] using simple k-NN (linear scan) plus minimum dwell time (20–30s) and recent-song memory.  
+GMM “station” gating assigns the stabilized V/A to the most likely cluster via `predict_proba`. If the top posterior is low (e.g., < 0.55), widen the gate to the top-2 clusters. Rank within the selected cluster set by Euclidean distance between the stabilized V/A and each song’s V/A; pick top-1 (or top-N for variety).
 
 - MC Dropout: Multiple stochastic forward passes with dropout active to estimate prediction uncertainty (mean and variance across samples).
 
@@ -27,10 +25,7 @@
 
 - Scene–Face Divergence: Mean Euclidean distance between scene and face predictions when both available; high divergence may indicate context overfitting in the scene model.
 
-- Dwell time: Minimum duration (≈20–30s) to keep the current music segment before allowing a switch.
-
-- KD-Tree / k-NN: Acceleration structure for large catalogs. Optional here since
-  the catalog is small; a linear scan suffices for the POC.
+- Dwell time: Minimum duration (≈20–30s) to keep the current song before allowing a switch.
 
 - GMM Stations: Gaussian Mixture clusters (K≈5, diag covariance) trained on
   DEAM song-level valence–arousal (in reference space with StandardScaler).

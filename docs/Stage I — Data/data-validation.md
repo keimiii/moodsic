@@ -18,7 +18,7 @@
 ## Integrity Checks
 - Verify train/val/test splits (no leakage).
 - Validate FE→DEAM scaling when querying retrieval index.
-- Ensure segment metadata completeness: `song_id`, `start_time`, `end_time`, `valence`, `arousal`.
+- Ensure song metadata completeness: `song_id`, `valence`, `arousal`.
 
 ## Missing/Corrupt Handling
 - Skip missing images during face dataset preparation; continue building `face_annotations.csv` with available items.

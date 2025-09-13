@@ -16,5 +16,6 @@
 - Single-face path extracts the most prominent face per frame/image.
 - Saved face crops and `face_annotations.csv` metadata for training the face model.
 
-## Segment Metadata
-- For DEAM, persist per-segment records: `song_id`, `start_time`, `end_time`, `valence`, `arousal` along with KD-Tree index.
+## Song Metadata
+- For DEAM, persist per-song records: `song_id`, `valence`, `arousal`, and
+  optional `gmm_cluster` for analysis/inspection.

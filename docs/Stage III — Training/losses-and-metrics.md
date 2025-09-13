@@ -63,4 +63,3 @@ for metric in ['ccc_v', 'ccc_a', 'mae_v', 'mae_a']:
 
 - Song-level emotional distance between query and retrieved songs.
 - Switching frequency and dwell time distribution to ensure minimum dwell constraints are met.
-- Optional (future): segment-level analyses if dynamic annotations/segmentation are enabled.
