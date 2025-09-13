@@ -269,7 +269,7 @@ def test_fallback_to_scene_when_no_face_detected_with_real_image():
     assert pytest.approx(res.fused.var_arousal) == 0.09
 
 
-# ---- New unit tests: stability guardrails (gating) -------------------------
+# ---- Unit tests: stability guardrails (gating) -------------------------
 
 class MockFaceProcessorWithScore:
     """Face processor that always returns a face crop with a configurable score."""
@@ -306,7 +306,7 @@ def test_gating_by_face_score_disables_unreliable_face():
     assert pytest.approx(res.fused.arousal) == -0.2
 
 
-# ---- New unit tests: post-fusion EMA stabilizer ---------------------------
+# ---- Unit tests: post-fusion EMA stabilizer ---------------------------
 
 class MockScenePredictorSeq:
     """Scene predictor that yields a sequence of (v,a,var_v,var_a) per call."""
@@ -420,3 +420,52 @@ def test_gating_by_brightness_disables_face_on_dark_frames():
 
     assert pytest.approx(res.fused.valence) == 0.2
     assert pytest.approx(res.fused.arousal) == -0.2
+
+
+# ---- Unit tests: sampling defaults & stabilizer disabled --------------
+
+def test_scene_and_face_receive_default_sampling_counts():
+    """Fusion forwards default scene_mc_samples and face_tta to adapters."""
+
+    class RecorderScenePredictor:
+        def __init__(self):
+            self.last_tta = None
+
+        def predict(self, frame_bgr: np.ndarray, tta: int = 10):
+            self.last_tta = tta
+            return 0.0, 0.0, (0.04, 0.04)
+
+    class RecorderFaceExpert:
+        def __init__(self):
+            self.last_tta = None
+
+        def predict(self, crop: np.ndarray, tta: int = 5):
+            self.last_tta = tta
+            return 0.1, -0.1, (0.01, 0.01)
+
+    face_proc = MockFaceProcessor(mode="valid")
+    scene = RecorderScenePredictor()
+    face = RecorderFaceExpert()
+    fusion = SceneFaceFusion(
+        scene_predictor=scene,
+        face_expert=face,
+        face_processor=face_proc,
+        scene_mc_samples=5,
+        face_tta=5,
+    )
+    frame = np.zeros((32, 32, 3), dtype=np.uint8)
+    _ = fusion.perceive_and_fuse(frame)
+    assert scene.last_tta == 5
+    assert face.last_tta == 5
+
+
+def test_stabilizer_disabled_by_default_has_no_metrics():
+    """By default, stabilizer is off and metrics remain None."""
+
+    scene = MockScenePredictor(0.0, 0.0, 0.01, 0.01)
+    fusion = SceneFaceFusion(scene_predictor=scene)  # enable_stabilizer=False by default
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    _ = fusion.perceive_and_fuse(frame)
+    res = fusion.perceive_and_fuse(frame)
+    assert res.stability_variance is None
+    assert res.stability_jitter is None
