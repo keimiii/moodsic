@@ -431,74 +431,24 @@ class SongMatcher:
 
 #### EMA with Uncertainty Gating
 
-The stabilization module combines exponential moving average smoothing with uncertainty-based gating to prevent erratic recommendations while maintaining responsiveness to genuine emotional changes. Defaults for MVP: `alpha = 0.7`, `uncertainty_threshold (τ) = 0.4`, and `n_mc_samples = 5` in prediction. Tune only if jitter or sluggishness is observed.
+Temporal smoothing with uncertainty gating is integrated in `SceneFaceFusion` and can be toggled on. Defaults for MVP: `alpha = 0.7`, `uncertainty_threshold (τ) = 0.4`. When enabled, stabilized values are returned in `res.fused` and basic metrics are exposed.
 
 ```python
-from collections import deque
-import numpy as np
+from models.fusion import SceneFaceFusion
 
-class AdaptiveStabilizer:
-    def __init__(self, alpha=0.7, uncertainty_threshold=0.4, window_size=60):
-        self.alpha = alpha  # EMA weight
-        self.uncertainty_threshold = uncertainty_threshold
-        self.window_size = window_size
-        
-        # State tracking
-        self.ema_valence = None
-        self.ema_arousal = None
-        self.last_stable_valence = 0.0
-        self.last_stable_arousal = 0.0
-        self.history = deque(maxlen=window_size)
-        
-    def update(self, valence, arousal, variance=None):
-        # Initialize on first frame
-        if self.ema_valence is None:
-            self.ema_valence = valence
-            self.ema_arousal = arousal
-            self.last_stable_valence = valence
-            self.last_stable_arousal = arousal
-            return valence, arousal
-        
-        # Apply EMA
-        self.ema_valence = self.alpha * valence + (1 - self.alpha) * self.ema_valence
-        self.ema_arousal = self.alpha * arousal + (1 - self.alpha) * self.ema_arousal
-        
-        # Uncertainty gating: hold last stable if variance exceeds threshold
-        if variance is not None:
-            v_var, a_var = variance
-            
-            if v_var > self.uncertainty_threshold:
-                output_valence = self.last_stable_valence
-            else:
-                output_valence = self.ema_valence
-                self.last_stable_valence = output_valence
-            
-            if a_var > self.uncertainty_threshold:
-                output_arousal = self.last_stable_arousal
-            else:
-                output_arousal = self.ema_arousal
-                self.last_stable_arousal = output_arousal
-        else:
-            output_valence = self.ema_valence
-            output_arousal = self.ema_arousal
-            self.last_stable_valence = output_valence
-            self.last_stable_arousal = output_arousal
-        
-        self.history.append((output_valence, output_arousal))
-        return output_valence, output_arousal
-    
-    def get_stability_metrics(self):
-        if len(self.history) < 2:
-            return {'variance': 0, 'jitter': 0}
-        
-        history_array = np.array(self.history)
-        variance = np.var(history_array, axis=0)
-        jitter = np.mean(np.abs(np.diff(history_array, axis=0)), axis=0)
-        
-        return {
-            'variance': variance,
-            'jitter': jitter
-        }
+fusion = SceneFaceFusion(
+    scene_predictor=scene_adapter,
+    face_expert=face_adapter,
+    face_processor=face_proc,
+    enable_stabilizer=True,
+    stabilizer_alpha=0.7,
+    uncertainty_threshold=0.4,
+)
+
+res = fusion.perceive_and_fuse(frame_bgr)
+v_stable, a_stable = res.fused.valence, res.fused.arousal
+stability_var = res.stability_variance  # tuple or None
+stability_jit = res.stability_jitter    # tuple or None
 ```
 
 ### Phase 1: Face-Aware Enhancement with EmoNet (Days 4-6)
@@ -652,90 +602,25 @@ class FaceEmotionRegressor(nn.Module):
 
 ### Phase 2: Scene-Face Fusion (Day 7)
 
-The fusion phase combines scene and face predictions through variance-weighted averaging, leveraging the complementary strengths of both approaches.
+The fusion phase combines scene and face predictions through variance-weighted averaging, leveraging the complementary strengths of both approaches. Production API lives in `models/fusion.py`.
 
 ```python
-class SceneFaceFusion:
-    def __init__(self, scene_model, face_model, face_processor):
-        self.scene_model = scene_model
-        self.face_model = face_model
-        self.face_processor = face_processor
-        
-        # Fusion weights (can be learned on validation set)
-        self.scene_weight = 0.6
-        self.face_weight = 0.4
-        
-    def predict(self, frame, use_variance_weighting=True, n_mc_samples=5):
-        # Scene prediction with uncertainty
-        scene_tensor = self._preprocess_frame(frame)
-        scene_mean, scene_var = self.scene_model(scene_tensor, n_samples=n_mc_samples)
-        
-        # Face prediction (if face detected)
-        face_crop = self.face_processor.extract_primary_face(frame)
-        
-        if face_crop is not None:
-            face_tensor = self._preprocess_frame(face_crop)
-            face_mean, face_var = self.face_model(face_tensor, n_samples=n_mc_samples)
-            
-            # Variance-weighted fusion
-            if use_variance_weighting:
-                final_pred, final_var = self._variance_weighted_fusion(
-                    scene_mean, scene_var,
-                    face_mean, face_var
-                )
-            else:
-                # Simple weighted average
-                final_pred = (self.scene_weight * scene_mean + 
-                             self.face_weight * face_mean)
-                final_var = (self.scene_weight * scene_var + 
-                            self.face_weight * face_var)
-        else:
-            # No face detected, use scene only
-            final_pred = scene_mean
-            final_var = scene_var
-        
-        valence = final_pred[0].item()
-        arousal = final_pred[1].item()
-        variance = (final_var[0].item(), final_var[1].item())
-        
-        return valence, arousal, variance
-    
-    def _variance_weighted_fusion(self, pred1, var1, pred2, var2):
-        # Weight by inverse variance
-        weight1 = 1 / (var1 + 1e-6)
-        weight2 = 1 / (var2 + 1e-6)
-        
-        # Normalize weights
-        total_weight = weight1 + weight2
-        weight1 = weight1 / total_weight
-        weight2 = weight2 / total_weight
-        
-        # Fused prediction
-        fused_pred = weight1 * pred1 + weight2 * pred2
-        
-        # Fused variance (approximation)
-        fused_var = 1 / total_weight
-        
-        return fused_pred, fused_var
-    
-    def _preprocess_frame(self, frame):
-        # Convert to tensor and normalize
-        if len(frame.shape) == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
-        elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
-        elif frame.shape[2] == 3:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        frame = cv2.resize(frame, (224, 224))
-        frame_tensor = torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0
-        
-        # Normalize with ImageNet stats
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        frame_tensor = (frame_tensor - mean) / std
-        
-        return frame_tensor.unsqueeze(0)
+from models.fusion import SceneFaceFusion
+
+# scene_adapter: e.g., models/scene/clip_vit_scene_adapter.SceneCLIPAdapter
+# face_adapter:  e.g., models/face/emonet_adapter.EmoNetAdapter
+# face_proc:     e.g., utils.emonet_single_face_processor.EmoNetSingleFaceProcessor
+
+fusion = SceneFaceFusion(
+    scene_predictor=scene_adapter,
+    face_expert=face_adapter,
+    face_processor=face_proc,
+    use_variance_weighting=True,  # inverse-variance baseline
+)
+
+res = fusion.perceive_and_fuse(frame_bgr)
+v, a = res.fused.valence, res.fused.arousal
+v_var, a_var = res.fused.var_valence, res.fused.var_arousal
 ```
 
 ---
@@ -972,8 +857,14 @@ class EmotionMusicDemo:
         self.scene_model = self._load_model('checkpoints/scene_model.pth')
         self.face_model = self._load_model('checkpoints/face_model.pth')
         self.face_processor = SingleFaceProcessor()
-        self.fusion = SceneFaceFusion(self.scene_model, self.face_model, self.face_processor)
-        self.stabilizer = AdaptiveStabilizer(alpha=0.7, uncertainty_threshold=0.5)
+        self.fusion = SceneFaceFusion(
+            self.scene_model,
+            self.face_model,
+            self.face_processor,
+            enable_stabilizer=True,
+            stabilizer_alpha=0.7,
+            uncertainty_threshold=0.5,
+        )
         self.matcher = SongLevelMusicMatcher(DEAMSongProcessor('./deam_data'))
         
     def process_video(self, video_path, show_face_crops=True):
@@ -1004,21 +895,24 @@ class EmotionMusicDemo:
             
             # Process frame (every 3rd frame for efficiency)
             if frame_count % 3 == 0:
-                # Get emotions with uncertainty
-                valence, arousal, variance = self.fusion.predict(frame, n_mc_samples=10)
+                # Get emotions with uncertainty (and stabilization if enabled)
+                res = self.fusion.perceive_and_fuse(frame)
+                valence, arousal = res.fused.valence, res.fused.arousal
+                variance = (res.fused.var_valence, res.fused.var_arousal)
                 
-                # Track if face was detected
-                face_crop = self.face_processor.extract_primary_face(frame)
-                if face_crop is not None:
+                # Track if face was detected (use fusion output metadata)
+                if res.face_bbox is not None:
                     faces_detected += 1
                     if show_face_crops and frame_count % 30 == 0:  # Sample face crops
+                        x, y, w, h = res.face_bbox
+                        crop = frame[y:y+h, x:x+w].copy()
                         results['face_crops'].append({
                             'time': current_time,
-                            'image': face_crop
+                            'image': crop
                         })
                 
-                # Stabilize
-                v_stable, a_stable = self.stabilizer.update(valence, arousal, variance)
+                # Stabilized values are returned in res.fused when stabilizer enabled
+                v_stable, a_stable = valence, arousal
                 
                 # Get music recommendation
                 song = self.matcher.get_music_for_frame(v_stable, a_stable, current_time)
@@ -1047,7 +941,11 @@ class EmotionMusicDemo:
         
         # Calculate metrics
         results['metrics']['face_detection_rate'] = faces_detected / (frame_count // 3)
-        results['metrics']['stability'] = self.stabilizer.get_stability_metrics()
+        # Basic stability metrics from last frame (if available)
+        results['metrics']['stability'] = {
+            'variance': getattr(res, 'stability_variance', None),
+            'jitter': getattr(res, 'stability_jitter', None),
+        }
         
         return results
     
@@ -1095,10 +993,12 @@ class EmotionMusicDemo:
             results = self.process_video(video, show_face_crops=True)
             fig = self.create_visualization(results)
             
+            st = results['metrics'].get('stability') or {}
+            sv = st.get('variance') or (0.0, 0.0)
+            sj = st.get('jitter') or (0.0, 0.0)
             metrics_text = f"""
             Face Detection Rate: {results['metrics']['face_detection_rate']:.2%}
-            Emotion Stability: V={results['metrics']['stability']['variance'][0]:.3f}, 
-                             A={results['metrics']['stability']['variance'][1]:.3f}
+            Emotion Stability: VarV={sv[0]:.3f}, VarA={sv[1]:.3f}, JitV={sj[0]:.3f}, JitA={sj[1]:.3f}
             Songs: {len(results['songs'])}
             """
             
