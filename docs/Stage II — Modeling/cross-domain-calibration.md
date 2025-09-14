@@ -46,13 +46,11 @@ class CrossDomainCalibration(nn.Module):
 
 ## Training
 
-Uses project's standard CCC + MSE loss (70/30 split) with L2 regularization:
+Use MSE loss with L2 regularization:
 
 ```python
-# Combined loss matching project conventions
-ccc_loss = 2 - ccc(pred_v, true_v) - ccc(pred_a, true_a)
-mse_loss = F.mse_loss(pred, target)
-total_loss = 0.7 * ccc_loss + 0.3 * mse_loss + l2_reg
+# Loss matching project conventions
+total_loss = F.mse_loss(pred, target) + l2_reg
 
 # L2 regularization prevents drift from identity
 l2_reg = λ * [(scale_v - 1)² + (scale_a - 1)² + shift_v² + shift_a²]
@@ -61,7 +59,7 @@ l2_reg = λ * [(scale_v - 1)² + (scale_a - 1)² + shift_v² + shift_a²]
 **Training procedure (fixed):**
 1. Use faces-found subset of FindingEmo with EmoNet predictions and GT (EmoNet remains frozen)
 2. Convert both predictions and GT to reference space [-1,1]
-3. Evaluate the calibration layer out-of-sample (e.g., 80/20 val split or k-fold CV); train with CCC+MSE; disable tanh clamping during optimization
+3. Evaluate the calibration layer out-of-sample (e.g., 80/20 val split or k-fold CV); train with MSE; disable tanh clamping during optimization
 4. Early stopping when validation loss plateaus; monitor parameters — if near identity, skip calibration
 5. Deployment: if calibration shows out-of-sample gains, refit the 4 parameters on 100% of the faces-found subset for the runtime model
 
@@ -133,4 +131,4 @@ pipeline = EmotionPipeline(enable_calibration=True)   # With calibration
 - Ranking (r, ρ) unchanged → calibration corrects bias/scale, not ordering.
 - Holdout ceiling (best affine on validation split): Valence CCC ≈ 0.205, Arousal CCC ≈ 0.017 → simple linear mapping cannot close the gap.
 
-Conclusion: Calibration can modestly improve valence on FindingEmo but remains well below acceptable thresholds; arousal gains are small and often not significant. Use calibration only if it improves holdout CCC; otherwise omit. The headline POC metric should rely on fusion + gating rather than face-only.
+Conclusion: Calibration can modestly improve valence on FindingEmo but remains well below acceptable thresholds; arousal gains are small and often not significant. Use calibration only if it improves holdout V/A MAE; otherwise omit. The headline POC metric should rely on fusion + gating rather than face-only.

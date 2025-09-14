@@ -7,8 +7,9 @@
 - [ ] Prepare face-crop dataset and metadata
 
 ## Summary
-- 25,000 images annotated with valence–arousal (V–A) values.
+- ≈25,000 images annotated with valence–arousal (V–A) values.
 - Used to train emotion regressors that output continuous valence and arousal.
+- Current experiments used 19,606 images after dataset filtering; face-path ablations operate on a faces-found subset (≈7,453; ~38% coverage).
 
 ## Labels and Ranges
 - Valence range: `[-3, 3]`

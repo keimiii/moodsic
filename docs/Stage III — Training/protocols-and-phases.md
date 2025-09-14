@@ -20,8 +20,8 @@ class PhaseTrainer:
         learn = Learner(
             scene_dls,
             scene_model,
-            loss_func=self._combined_loss,
-            metrics=[self._ccc_metric, mae],
+            loss_func=F.mse_loss,
+            metrics=[mae],
             cbs=[EarlyStoppingCallback(patience=5)]
         )
         lr = learn.lr_find().valley
@@ -53,8 +53,8 @@ evaluator = CalibrationEvaluator()
 results = evaluator.ablation_study(emonet_predictions, findingemo_labels, n_runs=5)
 
 # Only keep calibration if statistically significant improvement
-if results['ccc_avg']['significant']:
-    print("✓ Calibration improves performance")
+if results['mae_avg']['significant']:
+    print("✓ Calibration improves performance (lower MAE)")
 else:
     print("✗ No significant improvement - use without calibration")
 ```

@@ -1,9 +1,9 @@
 # Face Path (EmoNet)
 
-- [ ] Implement `SingleFaceProcessor` (MediaPipe) to extract primary face
-- [ ] Apply face alignment prior to inference (face-alignment library)
-- [ ] Integrate EmoNet via an adapter that handles alignment, normalization, inference, TTA uncertainty, and calibration (EmoNet→FindingEmo)
-- [ ] Evaluate face detection rate and impact
+- [✅] Implement `SingleFaceProcessor` (MediaPipe) to extract primary face → `utils/emonet_single_face_processor.py`
+- [✅] Apply face alignment prior to inference via MediaPipe eye keypoints (inter-ocular rotation; no separate face-alignment dependency) → `models/face/emonet_adapter.py`
+- [✅] Integrate EmoNet via an adapter that handles alignment, normalization, inference, TTA uncertainty, and calibration (EmoNet→FindingEmo) → `models/face/emonet_adapter.py` + `models/calibration/cross_domain.py`
+- [✅] Evaluate face detection rate and impact → Completed (see findings below)
 
 ## Findings on FindingEmo (Aug 25, 2025)
 
@@ -76,7 +76,7 @@ The adapter wraps EmoNet for inference:
 - Align face crop → resize → EmoNet normalization
 - Forward pass → continuous V/A
 - Optional TTA (flip/jitter) → mean/variance
-- Apply calibration (EmoNet→FindingEmo) only if it improves holdout CCC; default off. Train/operate the calibrator in reference space [-1, 1]; avoid clamping during optimization; convert back to FindingEmo after calibration.
+- Apply calibration (EmoNet→FindingEmo) only if it improves holdout V/A MAE; default off. Train/operate the calibrator in reference space [-1, 1]; avoid clamping during optimization; convert back to FindingEmo after calibration.
 
 ```python
 v, a, (v_var, a_var) = face_expert.predict(face_crop, tta=5)

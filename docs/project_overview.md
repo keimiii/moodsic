@@ -56,7 +56,7 @@ Single-source emotion detection also suffers from a fundamental attribution prob
 **Why These Specific Datasets**
 
 We use two carefully selected datasets that share a common emotional measurement system:
-- **FindingEmo**: 25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values
+- **FindingEmo**: ≈25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values. In current experiments, 19,606 images were used after dataset filtering; face detection succeeds on ≈38% of these (7,453/19,606) for face-path ablations.
 - **DEAM**: 1,802 songs with the same valence-arousal annotations
 
 This shared measurement system enables direct emotion mapping between video and music. When video shows specific valence-arousal values, we can query music with matching emotional signatures.
@@ -85,6 +85,33 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 - Select from top-k nearest while enforcing dwell-time and recent-song memory
 - Enforces 20-30 second minimum play time before switching
 
+## VEATIC (Inference) — Dataset Details
+
+**What it is**
+- 124 in-the-wild video clips (movies, documentaries, home videos) with continuous, frame-level valence and arousal (V/A) annotations via real-time human ratings. Labels target a selected character per clip while preserving full-scene context.
+
+**Official Links**
+- Project page: https://veatic.github.io
+- arXiv: https://arxiv.org/abs/2309.06745
+- WACV 2024 (Open Access): https://openaccess.thecvf.com/content/WACV2024/html/Ren_VEATIC_Video-Based_Emotion_and_Affect_Tracking_in_Context_Dataset_WACV_2024_paper.html
+- Code/baseline: https://github.com/AlbusPeter/VEATIC
+
+**What it consists of**
+- Videos: `video/{video_id}.mp4`
+- Averaged labels (per-frame): `rating_averaged/{video_id}_valence.csv`, `rating_averaged/{video_id}_arousal.csv`
+- Optional frames: `frames/{video_id}/{frame_id}.jpg` (if pre-extracted)
+- Interacting characters: video IDs 98–123 include multiple characters with separate ratings
+- Psychophysics per-rater time series (IDs 0–82): downloadable as a separate artifact on the project page
+
+**Intended usage in this project**
+- VEATIC serves as the primary video inference/benchmark dataset to validate vision models’ V/A predictions under realistic, context-rich conditions. We evaluate using V/A MAE (primary), plus MSE and rank-based correlations (Spearman’s ρ; Pearson r) as supplemental diagnostics.
+
+**Integration status (TBD)**
+- We will integrate VEATIC labels into the inference/evaluation pipeline. The exact preprocessing and wiring are not finalized. We are considering lightweight temporal preprocessing (e.g., smoothing and modest downsampling) to align label cadence with model outputs and reduce per-frame jitter; final choices will be documented once decided.
+
+**Licensing note**
+- VEATIC is available for research purposes; copyright remains with the original owners of the video content. Redistribution and commercial use are restricted per the project’s terms.
+
 ## 2. Course Requirements Coverage
 
 The system fulfills three of four course requirements through its technical implementation:
@@ -100,9 +127,9 @@ The system fulfills three of four course requirements through its technical impl
 Update: EmoNet integration for face pathway (Aug 15, 2025)
 
 - Decision: Replace the Phase 1 face model with the pretrained EmoNet face-affect estimator as the face expert. No face-model training is needed for the MVP.
-- Preprocessing: Use single-face detection (MediaPipe) to select the primary face, then apply face alignment (face-alignment library) to match EmoNet's expected input. Resize/normalize exactly as per EmoNet demo.
+- Preprocessing: Use single-face detection (MediaPipe) to select the primary face, then apply lightweight eye-keypoint rotation using MediaPipe to level the face before resizing/normalization (no separate face-alignment library dependency).
 - Uncertainty: Approximate with test-time augmentation (TTA; e.g., flip and small scale/crop jitter) and use the prediction variance with the existing uncertainty gating.
-- Calibration (optional): Train/operate in reference space [-1, 1]; apply only if it improves holdout CCC. Default off. After face-space calibration, use the FE→DEAM mapping in MATCH.
+- Calibration (optional): Train/operate in reference space [-1, 1]; apply only if it improves holdout V/A MAE (lower is better). Default off. After face-space calibration, use the FE→DEAM mapping in MATCH.
   - Note: EmoNet is frozen. Any validation split/k-fold is for the calibration layer only; if improvements are confirmed out-of-sample, refit calibration on 100% of faces-found for deployment.
 - Fusion: Keep the current inverse-variance fusion between scene and face experts. EmoNet serves as the face expert; optional student model can be added later as a distilled replacement or fallback.
 - Licensing: EmoNet is CC BY-NC-ND 4.0. We will not fine-tune or modify the weights. For distribution, prefer loading checkpoints from upstream or a download script with attribution; if vendoring unmodified weights, preserve the original license and attribution and keep the project non-commercial.
@@ -113,10 +140,9 @@ POC Evaluation Plan (Ablations)
 - Scene-only: Scene model on full dataset.
 - Fusion (late): Weighted combination on faces-found subset.
 - Fusion + gating: Fallback to scene-only when no face; report on full dataset. This serves as the headline metric.
-- Metrics: Previously emphasized CCC (valence, arousal, mean) plus Pearson r
-  and Spearman ρ for diagnostics. Note: CCC is under review (FindingEmo paper
-  excludes it); team may prioritize MAE/MSE (in FE units) and Spearman ρ.
-  Always state scale conversions used.
+- Metrics: Use V/A MAE as the primary metric. Report MSE and Spearman’s ρ/Pearson r
+  as supplemental diagnostics. CCC is removed due to instability (NaNs when
+  variance is near zero). Always state scale conversions used.
 
 Observed Limitations (Aug 25, 2025)
 
@@ -131,12 +157,9 @@ Scale Conversions (for clarity)
   alignment across models (EmoNet, Scene, DEAM).
 - FindingEmo → Reference [-1, 1]: v_ref = v_fe / 3; a_ref = (a_fe − 3) / 3.
 - Reference → FindingEmo: v_fe = 3 · v_ref; a_fe = 3 · a_ref + 3.
-- Scene training normalization (for stability): FE → unit [0,1]
-  - v_unit = (v_fe + 3) / 6
-  - a_unit = a_fe / 6
-- Inverse for reporting: unit [0,1] → FE units
-  - v_fe = 6 · v_unit − 3
-  - a_fe = 6 · a_unit
+- Scene training normalization (for stability): labels may be normalized to unit [0,1] internally
+  - From FindingEmo to unit: v_unit = (v_fe + 3) / 6; a_unit = a_fe / 6
+  - Back to reference for metrics: v_ref = 2 · v_unit − 1; a_ref = 2 · a_unit − 1
 
 ## 3. System Architecture
 
@@ -164,24 +187,21 @@ weighting.
   `IMAGE_SIZE=608`; model inputs shaped `(3, 608, 800)`.
 - Splits: VA-binned 70/15/15 train/val/test split.
 - Scale handling:
-  - Training: FE → unit [0,1] (stability, aligns with FindingEmo baselines);
-    metrics are reported in FE units via inverse mapping.
-  - Reference space [-1,1] remains the cross-model alignment for EmoNet/Scene/
-    DEAM (unchanged policy).
+  - Labels are converted from FindingEmo to the reference space [-1, 1] for training and evaluation. Internal normalization (e.g., unit [0,1]) may be used for stability, but all reported metrics are computed in reference space [-1, 1].
+  - Reference space [-1, 1] remains the cross-model alignment for EmoNet/Scene/DEAM (unchanged policy).
 - Loss and metrics (current run):
-  - Loss: MSE in unit [0,1] space.
-  - Test metrics (FE units unless stated):
+  - Loss: MSE (internal normalization if used).
+  - Test metrics (reference space [-1, 1] unless stated):
     - `test_loss` (criterion in [0,1]): 0.0802606568
     - `test_mse`: 2.8893843
     - `test_mae_v`: 1.5041405; `test_mae_a`: 1.3699309; `test_mae_avg`: 1.4370357
     - Spearman’s ρ — V: 0.2116446; A: 0.1460789; Avg: 0.1788618
-    - CCC — `test_ccc_v/a/avg`: NaN (torchmetrics warning: near-zero variance)
+    - CCC — deprecated; not reported (previous attempts yielded NaN with near-zero variance)
   - Training/validation: train_loss/valid_loss tracked via CSVLogger; best
     validation is selected for testing.
-- Metrics policy (status): CCC was initially emphasized, but the FindingEmo
-  paper excludes CCC; the team is reevaluating primary metrics. MAE/MSE (FE
-  units) and Spearman’s ρ are reported; CCC may be retained as supplemental or
-  removed pending decision.
+- Metrics policy: CCC removed due to instability (NaNs when variance is near zero).
+  Use V/A MAE as the primary metric. Report MSE and Spearman’s ρ/Pearson r as
+  supplemental diagnostics; do not compute CCC going forward.
 
 ### Complete Processing Pipeline with Phased Implementation
 
@@ -824,8 +844,8 @@ class PhaseTrainer:
         learn = Learner(
             scene_dls,
             scene_model,
-            loss_func=self._combined_loss,
-            metrics=[self._ccc_metric, mae],
+            loss_func=self._loss,
+            metrics=[mae],
             cbs=[EarlyStoppingCallback(patience=5)]
         )
         
@@ -843,21 +863,9 @@ class PhaseTrainer:
     
     # Face training is not used: EmoNet is the face expert and remains fixed (no training).
     
-    def _combined_loss(self, pred, target):
-        # 70% CCC + 30% MSE
-        ccc_loss = 2 - self._ccc(pred[:, 0], target[:, 0]) - self._ccc(pred[:, 1], target[:, 1])
-        mse_loss = F.mse_loss(pred, target)
-        return 0.7 * ccc_loss + 0.3 * mse_loss
-    
-    def _ccc(self, pred, true):
-        pred_mean = pred.mean()
-        true_mean = true.mean()
-        covariance = ((pred - pred_mean) * (true - true_mean)).mean()
-        pred_var = pred.var()
-        true_var = true.var()
-        
-        ccc = (2 * covariance) / (pred_var + true_var + (pred_mean - true_mean)**2 + 1e-8)
-        return ccc
+    def _loss(self, pred, target):
+        # MSE in reference space [-1, 1]
+        return F.mse_loss(pred, target)
 ```
 
 ---
@@ -870,7 +878,9 @@ The evaluation framework employs carefully selected metrics for each pipeline st
 
 #### Perceive Stage Metrics
 
-**Concordance Correlation Coefficient (CCC)** serves as the primary metric, measuring both correlation and absolute agreement between predictions and ground truth. The CCC is particularly critical for evaluating whether face-based predictions improve upon scene-only baselines, indicating successful mitigation of context overfitting.
+**V/A MAE (primary)** measures absolute error per dimension and is easy to interpret across scales. Lower MAE indicates better agreement with ground truth and is robust for continuous regression.
+
+Note: CCC is deprecated. CCC relies on Pearson correlation and can produce NaNs when predictions or targets have near-zero variance (denominator approaches zero in torchmetrics).
 
 **Face Detection Rate** measures the percentage of frames where a face is successfully detected and processed, providing insight into the robustness of the face pathway across diverse video content.
 
@@ -896,7 +906,7 @@ The evaluation framework employs carefully selected metrics for each pipeline st
 
 #### Study 1: Scene-Only vs EmoNet-Enhanced Performance
 
-This study quantifies the improvement from incorporating EmoNet by comparing Phase 0 (scene-only) against Phase 1 (scene + EmoNet face expert). The evaluation measures CCC improvement, reduction in context-dependent errors, and performance on multi-person scenes where facial grounding is critical.
+This study quantifies the improvement from incorporating EmoNet by comparing Phase 0 (scene-only) against Phase 1 (scene + EmoNet face expert). The evaluation measures MAE reduction, reduction in context-dependent errors, and performance on multi-person scenes where facial grounding is critical.
 
 #### Study 2: Impact of Uncertainty Gating
 
@@ -1144,7 +1154,7 @@ to be determined.
 
 ### 11.1 EmoNet Integration and Licensing
 
-- Face expert: EmoNet (pretrained), integrated via an adapter that aligns inputs (face-alignment), matches EmoNet normalization, and outputs valence/arousal for fusion and stabilization.
+- Face expert: EmoNet (pretrained), integrated via an adapter that aligns inputs via MediaPipe eye-keypoint rotation (no face-alignment library), matches EmoNet normalization, and outputs valence/arousal for fusion and stabilization.
 - Calibration: Fit per-dimension affine transforms on a small FindingEmo validation split to map EmoNet outputs into FindingEmo’s V/A space; then apply FE→DEAM mapping in MATCH as defined earlier. Store calibration parameters with the model artifacts.
 - Uncertainty: Use test-time augmentation (e.g., horizontal flip and minor crop/scale jitter) to obtain a prediction variance for inverse-variance fusion and uncertainty gating.
 - Distribution and license:

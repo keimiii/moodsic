@@ -21,7 +21,8 @@ GMM “station” gating assigns the stabilized V/A to the most likely cluster v
 
 - EMA (Exponential Moving Average): Temporal smoothing where `ema_t = α * x_t + (1-α) * ema_{t-1}`.
 
-- CCC (Concordance Correlation Coefficient): Primary evaluation metric combining correlation and agreement between predictions and ground truth.
+- MAE (Mean Absolute Error): Primary evaluation metric for valence and arousal; lower is better and easy to interpret.
+- CCC (Concordance Correlation Coefficient): Deprecated due to instability when predictions or targets have near-zero variance (torchmetrics may return NaN). Not used.
 
 - Scene–Face Divergence: Mean Euclidean distance between scene and face predictions when both available; high divergence may indicate context overfitting in the scene model.
 

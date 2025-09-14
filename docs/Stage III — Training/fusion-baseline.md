@@ -20,6 +20,6 @@ class SceneFaceFusion:
 ## Validation Protocol
 
 - Use held-out validation split from FindingEmo.
-- Evaluate baseline variance-weighted fusion with combined loss (CCC+MSE) and report per-dimension CCC and MAE.
+- Evaluate variance-weighted fusion with MSE loss and report per-dimension MAE (primary). Optionally report Spearman’s ρ.
 - Track scene–face divergence to detect context overfitting.
 - Assess stability metrics after EMA+gating to ensure the baseline maintains responsiveness.

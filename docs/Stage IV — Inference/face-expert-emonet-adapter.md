@@ -11,7 +11,7 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
   - Select device (CPU/GPU), set `eval()` and `no_grad()`.
 - Preprocessing
   - Input: an RGB/BGR face crop (from the primary face selection).
-  - Face alignment (via the `face-alignment` library) to match EmoNet’s expected input.
+  - Face alignment via MediaPipe eye keypoints (inter-ocular rotation) to approximately level faces before resizing/normalization (no separate `face-alignment` dependency).
   - Resize and apply EmoNet’s normalization exactly as in upstream demos.
 - Inference
   - Run forward pass to get continuous valence and arousal (optionally expression class if needed).
@@ -71,7 +71,7 @@ class EmoNetAdapter:
 - Outputs remain in reference space `[-1, 1]`; convert to FindingEmo/DEAM only where required via `EmotionScaleAligner`.
 
 ## Dependencies
-- `face-alignment` (alignment)
+- `mediapipe` (detection + eye keypoints for alignment)
 - `torch`, `opencv-python`, `numpy`
 
 ## Notes on licensing

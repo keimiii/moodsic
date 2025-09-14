@@ -1,9 +1,9 @@
 # Uncertainty and Gating
 
-- [ ] Implement MC Dropout for scene model; use TTA-based uncertainty for EmoNet face expert
-- [ ] Set and tune `n_mc_samples`, `alpha`, and uncertainty threshold `τ`
-- [ ] Apply EMA smoothing with uncertainty gating
-- [ ] Expose stability metrics (variance, jitter)
+- ✅ Implement MC Dropout for scene model; use TTA-based uncertainty for EmoNet face expert
+- ✅ Set and tune `n_mc_samples`, `alpha`, and uncertainty threshold `τ`
+- ✅ Apply EMA smoothing with uncertainty gating
+- ✅ Expose stability metrics (variance, jitter)
 
 ## MC Dropout
 Perform multiple stochastic forward passes to estimate predictive variance for valence and arousal.
