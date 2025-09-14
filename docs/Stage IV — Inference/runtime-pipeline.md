@@ -1,8 +1,8 @@
 # Runtime Pipeline
 
 - [ ] Implement PERCEIVE → STABILIZE → MATCH end-to-end
-- [ ] Enable MC Dropout for uncertainty in PERCEIVE
-- [ ] Integrate scene–face fusion with variance-weighted averaging
+- [x] Enable MC Dropout/TT sampling for uncertainty in PERCEIVE
+- [x] Integrate scene–face fusion with variance-weighted averaging
 - [ ] Wire stabilized outputs into k-NN music retrieval with dwell-time
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
@@ -10,6 +10,16 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 ## Overview
 
 Three-stage runtime pipeline that converts video frames into song recommendations.
+
+Current status (code):
+- PERCEIVE implemented for scene and face experts; both provide uncertainty via sampling.
+  - Scene: CLIP/ViT adapter with MC Dropout heads — `models/scene/clip_vit_scene_adapter.py`
+  - Face: EmoNet adapter with TTA-based variance — `models/face/emonet_adapter.py`
+- Fusion implemented with inverse-variance weighting and fallbacks — `models/fusion.py`
+- Post-fusion STABILIZE (EMA + uncertainty gating) integrated as an optional component inside fusion — `models/fusion.py`
+- Overlay/debug utilities available — `utils/fusion_overlay.py`
+- Tests cover fusion math, gating, stabilizer behavior, and overlay — `tests/test_fusion.py`, `tests/test_fusion_overlay.py`
+- MATCH retrieval not yet implemented.
 
 ```
 [RUNTIME INFERENCE PIPELINE]
@@ -54,10 +64,12 @@ Three-stage runtime pipeline that converts video frames into song recommendation
   - Scene model: CLIP/ViT backbone, regression heads with dropout; MC Dropout for mean/variance.
   - Face path: single-face detection (MediaPipe), face alignment, and EmoNet inference via an adapter that handles preprocessing, calibration (EmoNet→FindingEmo), and optional TTA-based uncertainty.
   - Fusion: variance-weighted averaging when both paths available; fall back to scene-only when no face.
+  - Defaults: `scene_mc_samples=5`, `face_tta=5`; outputs in reference space `[-1, 1]`.
 
 - STABILIZE
   - Exponential Moving Average (EMA) over valence/arousal.
   - Uncertainty gating: if variance exceeds threshold, hold last stable values.
+  - Implemented inside `SceneFaceFusion` (enable with `enable_stabilizer=True`). Defaults: `alpha=0.7`, `τ=0.4`, window `60`.
 
 - MATCH (POC)
   - Linear-scan k-NN over DEAM songs using static [1, 9] annotations.
@@ -65,13 +77,14 @@ Three-stage runtime pipeline that converts video frames into song recommendation
     (StandardScaler + GaussianMixture) before k-NN.
   - Enforce minimum dwell time and recent-song avoidance.
   - Use explicit FE→DEAM static [1, 9] scaling for queries.
+  - Status: not yet implemented.
 
 ## Runtime Driver (PERCEIVE Orchestrator)
 
 Purpose: Single place that coordinates PERCEIVE per frame, returning fused
 valence/arousal and uncertainties to any frontend or the next stages.
 
-- Location (planned): `utils/runtime_driver.py`
+- Location: `utils/runtime_driver.py` (skeleton present)
 - Depends on:
   - `utils/emonet_single_face_processor.EmoNetSingleFaceProcessor`
   - `models.face.emonet_adapter.EmoNetAdapter`
@@ -116,8 +129,18 @@ Scene model integration (later):
 - Provide a `scene_predictor` implementing
   `predict(frame_bgr, tta:int) -> (v,a,(var_v,var_a))` in reference space.
 - No changes to the driver or fusion core are required.
+ - A reference adapter is available: `models/scene/clip_vit_scene_adapter.py`.
 
 TODO:
-- [ ] Add `utils/runtime_driver.py` with `PerceiveFusionDriver` skeleton.
-- [ ] Connect STABILIZE (EMA + uncertainty gating) after `step()`.
+- [x] Add `utils/runtime_driver.py` with `PerceiveFusionDriver` skeleton.
+- [ ] Wire `SceneFaceFusion` inside driver (`step()`), pass sampling counts and enable stabilizer as needed.
 - [ ] Connect MATCH (DEAM scaling + linear-scan k-NN; optional GMM gating) after stabilization.
+
+References:
+- Fusion core and stabilizer: `models/fusion.py`
+- Face expert: `models/face/emonet_adapter.py`
+- Face detection/cropping: `utils/emonet_single_face_processor.py`
+- Scene adapter (CLIP/ViT with MC Dropout): `models/scene/clip_vit_scene_adapter.py`
+- Overlay utility: `utils/fusion_overlay.py`
+- Scale alignment utilities: `utils/emotion_scale_aligner.py`
+- Tests: `tests/test_fusion.py`, `tests/test_fusion_overlay.py`
