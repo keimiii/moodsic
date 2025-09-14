@@ -273,6 +273,7 @@ DEAM Dataset (1802 songs with dynamic V-A)
 | STABILIZE: Temporal smoothing           |
 | - EMA (α-tuned, 3-5s window)           |
 | - Uncertainty gating (hold if σ > τ)    |
+| - Optional face guardrails (score/σ/brightness) |
 | - Per-frame processing                  |
 +------------------------------------------+
      |
@@ -440,6 +441,8 @@ fusion = SceneFaceFusion(
     scene_predictor=scene_adapter,
     face_expert=face_adapter,
     face_processor=face_proc,
+    scene_mc_samples=5,
+    face_tta=5,
     enable_stabilizer=True,
     stabilizer_alpha=0.7,
     uncertainty_threshold=0.4,
@@ -856,14 +859,14 @@ class EmotionMusicDemo:
         # Initialize all components
         self.scene_model = self._load_model('checkpoints/scene_model.pth')
         self.face_model = self._load_model('checkpoints/face_model.pth')
-        self.face_processor = SingleFaceProcessor()
+        self.face_processor = EmoNetSingleFaceProcessor()
         self.fusion = SceneFaceFusion(
             self.scene_model,
             self.face_model,
             self.face_processor,
             enable_stabilizer=True,
             stabilizer_alpha=0.7,
-            uncertainty_threshold=0.5,
+            uncertainty_threshold=0.4,
         )
         self.matcher = SongLevelMusicMatcher(DEAMSongProcessor('./deam_data'))
         
