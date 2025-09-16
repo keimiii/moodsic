@@ -476,17 +476,11 @@ class VAMetrics:
             metric_fn = self.metric_functions[metric_name]
             results[f'arousal_{metric_name}'] = metric_fn(arousal_true, arousal_pred)
         
-        # Compute average metrics
+        # Compute average metrics (follow CLIP notebook: arithmetic mean across dims)
         for metric_name in self.metrics:
             val_metric = results[f'valence_{metric_name}']
             ar_metric = results[f'arousal_{metric_name}']
-            
-            # For correlation metrics, average directly
-            if metric_name in ['ccc', 'pearson']:
-                results[f'{metric_name}_avg'] = (val_metric + ar_metric) / 2
-            # For error metrics, use quadratic mean (RMS of errors)
-            else:  # mse, rmse, mae
-                results[f'{metric_name}_avg'] = np.sqrt((val_metric**2 + ar_metric**2) / 2)
+            results[f'{metric_name}_avg'] = (val_metric + ar_metric) / 2
         
         # Compute per-quadrant metrics if requested
         if self.compute_per_quadrant:
@@ -563,11 +557,8 @@ class VAMetrics:
                 v_metric = metric_fn(v_true_quad, v_pred_quad)
                 a_metric = metric_fn(a_true_quad, a_pred_quad)
                 
-                # Average valence and arousal metrics
-                if metric_name in ['ccc', 'pearson']:
-                    quad_results[f'{quad_name}_{metric_name}_avg'] = (v_metric + a_metric) / 2
-                else:
-                    quad_results[f'{quad_name}_{metric_name}_avg'] = np.sqrt((v_metric**2 + a_metric**2) / 2)
+                # Average valence and arousal metrics (arithmetic mean)
+                quad_results[f'{quad_name}_{metric_name}_avg'] = (v_metric + a_metric) / 2
             
             quad_results[f'{quad_name}_count'] = int(np.sum(mask))
             results.update(quad_results)
@@ -652,7 +643,7 @@ def evaluate_model_predictions(valence_true: Union[torch.Tensor, np.ndarray],
     Returns:
         Dictionary containing all computed metrics
     """
-    # Align ranges: clip both predictions and targets to [-1, 1]
+    # Convert to numpy
     def _to_numpy(x: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         if isinstance(x, torch.Tensor):
             return x.detach().cpu().numpy().astype(np.float64)
@@ -663,7 +654,24 @@ def evaluate_model_predictions(valence_true: Union[torch.Tensor, np.ndarray],
     a_t = _to_numpy(arousal_true)
     a_p = _to_numpy(arousal_pred)
 
-    # Clip to expected V–A range
+    # Auto-detect units and map to reference [-1,1] if inputs look like FE units
+    # FE (FindingEmo) units typically: V in [-3,3], A in [0,6]
+    def _to_ref_v(v: np.ndarray) -> np.ndarray:
+        vmax = np.nanmax(v)
+        vmin = np.nanmin(v)
+        return v / 3.0 if (vmax > 1.2 or vmin < -1.2) else v
+
+    def _to_ref_a(a: np.ndarray) -> np.ndarray:
+        amax = np.nanmax(a)
+        amin = np.nanmin(a)
+        return (a - 3.0) / 3.0 if (amax > 1.2 or amin < -1.2) else a
+
+    v_t = _to_ref_v(v_t)
+    a_t = _to_ref_a(a_t)
+    v_p = _to_ref_v(v_p)
+    a_p = _to_ref_a(a_p)
+
+    # Clip to expected reference range
     v_t = np.clip(v_t, -1.0, 1.0)
     v_p = np.clip(v_p, -1.0, 1.0)
     a_t = np.clip(a_t, -1.0, 1.0)

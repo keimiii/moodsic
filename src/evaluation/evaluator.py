@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import Rectangle
 import matplotlib.patches as mpatches
+from src.utils.metrics import evaluate_scene_model_predictions
 
 # Set style for better plots
 plt.style.use('default')
@@ -137,6 +138,7 @@ class VAEvaluator:
                         raise ValueError(f"Unsupported batch format: {type(batch)}")
                     
                     images = images.to(self.device)
+                    # Convert targets to numpy
                     valence_true = valence_true.cpu().numpy() if torch.is_tensor(valence_true) else valence_true
                     arousal_true = arousal_true.cpu().numpy() if torch.is_tensor(arousal_true) else arousal_true
                     
@@ -151,20 +153,44 @@ class VAEvaluator:
                         else:
                             valence_pred, arousal_pred = outputs[:, 0], outputs[:, 1]
                     
-                    # Convert to numpy
+                    # Convert predictions to numpy
                     valence_pred = valence_pred.cpu().numpy() if torch.is_tensor(valence_pred) else valence_pred
                     arousal_pred = arousal_pred.cpu().numpy() if torch.is_tensor(arousal_pred) else arousal_pred
+
+                    # Auto-map all values to reference [-1,1] range if needed
+                    import numpy as _np
+                    def _to_ref_v(v):
+                        v = _np.asarray(v, dtype=_np.float64)
+                        vmax = _np.nanmax(v)
+                        vmin = _np.nanmin(v)
+                        return v / 3.0 if (vmax > 1.2 or vmin < -1.2) else v
+                    def _to_ref_a(a):
+                        a = _np.asarray(a, dtype=_np.float64)
+                        amax = _np.nanmax(a)
+                        amin = _np.nanmin(a)
+                        return (a - 3.0) / 3.0 if (amax > 1.2 or amin < -1.2) else a
+
+                    v_t_ref = _to_ref_v(valence_true)
+                    a_t_ref = _to_ref_a(arousal_true)
+                    v_p_ref = _to_ref_v(valence_pred)
+                    a_p_ref = _to_ref_a(arousal_pred)
+
+                    # Clip to [-1,1] to be safe
+                    v_t_ref = _np.clip(v_t_ref, -1.0, 1.0)
+                    a_t_ref = _np.clip(a_t_ref, -1.0, 1.0)
+                    v_p_ref = _np.clip(v_p_ref, -1.0, 1.0)
+                    a_p_ref = _np.clip(a_p_ref, -1.0, 1.0)
                     
                     # Store results
-                    batch_size = len(valence_true)
+                    batch_size = len(v_t_ref)
                     for i in range(batch_size):
                         self.evaluation_data.append({
-                            'valence_true': float(valence_true[i]),
-                            'arousal_true': float(arousal_true[i]),
-                            'valence_pred': float(valence_pred[i]),
-                            'arousal_pred': float(arousal_pred[i]),
-                            'quadrant_true': self._get_quadrant(valence_true[i], arousal_true[i]),
-                            'quadrant_pred': self._get_quadrant(valence_pred[i], arousal_pred[i])
+                            'valence_true': float(v_t_ref[i]),
+                            'arousal_true': float(a_t_ref[i]),
+                            'valence_pred': float(v_p_ref[i]),
+                            'arousal_pred': float(a_p_ref[i]),
+                            'quadrant_true': self._get_quadrant(v_t_ref[i], a_t_ref[i]),
+                            'quadrant_pred': self._get_quadrant(v_p_ref[i], a_p_ref[i])
                         })
                     
                     processed_samples += batch_size
@@ -183,9 +209,24 @@ class VAEvaluator:
         print(f"✅ Evaluation completed: {processed_samples} samples in {total_time:.2f}s")
         print(f"⚡ Processing speed: {samples_per_sec:.1f} samples/sec")
         
-        # Convert to DataFrame and calculate metrics
+        # Convert to DataFrame and calculate metrics using the same utility
+        # used by the training notebook (ensures naming and math match)
         df = pd.DataFrame(self.evaluation_data)
-        self.metrics = self._calculate_metrics(df)
+        preds = {
+            'valence': df['valence_pred'].to_numpy(),
+            'arousal': df['arousal_pred'].to_numpy(),
+        }
+        targs = {
+            'valence': df['valence_true'].to_numpy(),
+            'arousal': df['arousal_true'].to_numpy(),
+        }
+        self.metrics = evaluate_scene_model_predictions(
+            predictions=preds,
+            targets=targs,
+            metrics_config={'va_metrics': ['mae', 'mse', 'rmse', 'ccc', 'pearson', 'spearman'],
+                           'compute_per_quadrant': True},
+            verbose=False,
+        )
         self.metadata.update({
             "num_samples": processed_samples,
             "processing_time": total_time,
@@ -323,7 +364,10 @@ class VAEvaluator:
         ax1.plot([-1, 1], [-1, 1], 'r--', alpha=0.8, linewidth=2, label='Perfect Prediction')
         ax1.set_xlabel('True Valence')
         ax1.set_ylabel('Predicted Valence')
-        ax1.set_title(f'Valence: Predicted vs True\nMAE: {self.metrics.get("valence_mae", 0):.3f}, CCC: {self.metrics.get("valence_ccc", 0):.3f}')
+        ax1.set_title(
+            f'Valence: Predicted vs True\nMAE: {self.metrics.get("va_valence_mae", self.metrics.get("valence_mae", 0)):.3f}, '
+            f'CCC: {self.metrics.get("va_valence_ccc", self.metrics.get("valence_ccc", 0)):.3f}'
+        )
         ax1.grid(True, alpha=0.3)
         ax1.legend()
         ax1.set_xlim(-1, 1)
@@ -335,7 +379,10 @@ class VAEvaluator:
         ax2.plot([-1, 1], [-1, 1], 'r--', alpha=0.8, linewidth=2, label='Perfect Prediction')
         ax2.set_xlabel('True Arousal')
         ax2.set_ylabel('Predicted Arousal')
-        ax2.set_title(f'Arousal: Predicted vs True\nMAE: {self.metrics.get("arousal_mae", 0):.3f}, CCC: {self.metrics.get("arousal_ccc", 0):.3f}')
+        ax2.set_title(
+            f'Arousal: Predicted vs True\nMAE: {self.metrics.get("va_arousal_mae", self.metrics.get("arousal_mae", 0)):.3f}, '
+            f'CCC: {self.metrics.get("va_arousal_ccc", self.metrics.get("arousal_ccc", 0)):.3f}'
+        )
         ax2.grid(True, alpha=0.3)
         ax2.legend()
         ax2.set_xlim(-1, 1)

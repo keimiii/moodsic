@@ -503,7 +503,27 @@ class SceneModelTrainer:
             if epoch % self.config.checkpointing.save_every_n_epochs == 0:
                 self._save_checkpoint(epoch, is_best=False)
         
-        # Final evaluation on test set
+        # Final evaluation on test set using BEST checkpoint
+        # Load best model weights if available before evaluating on test set
+        best_checkpoint_path = None
+        best_checkpoint_epoch = None
+        try:
+            from pathlib import Path as _Path
+            best_ckpt = _Path(self.config.checkpointing.save_dir) / "best_model.pth"
+            if best_ckpt.exists():
+                _ckpt = torch.load(best_ckpt, map_location=self.device_manager.device)
+                if isinstance(_ckpt, dict) and 'model_state_dict' in _ckpt:
+                    self.model.load_state_dict(_ckpt['model_state_dict'])
+                    best_checkpoint_path = str(best_ckpt)
+                    best_checkpoint_epoch = int(_ckpt.get('epoch')) if 'epoch' in _ckpt else None
+                    self.logger.info(f"📂 Loaded best model weights from: {best_ckpt}")
+                else:
+                    self.logger.warning(f"⚠️ Best checkpoint missing model_state_dict: {best_ckpt}")
+            else:
+                self.logger.warning(f"⚠️ Best checkpoint not found at {best_ckpt}; using current model state")
+        except Exception as _e:
+            self.logger.warning(f"⚠️ Failed to load best checkpoint for test eval: {_e}")
+
         test_metrics = self._evaluate_test_set()
         
         self.logger.info("🏁 Training completed!")
@@ -512,7 +532,9 @@ class SceneModelTrainer:
         return {
             'best_metric': self.best_metric,
             'test_metrics': test_metrics,
-            'total_epochs': self.current_epoch + 1
+            'total_epochs': self.current_epoch + 1,
+            'best_checkpoint_path': best_checkpoint_path,
+            'best_checkpoint_epoch': best_checkpoint_epoch,
         }
     
     def _save_checkpoint(self, epoch, is_best=False):

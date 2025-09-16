@@ -164,8 +164,8 @@ cython_debug/
 # macOS
 .DS_Store
 
-# Data folder
-data/
+# Data folder (only top-level)
+/data/
 
 models/emonet/evaluation/face_cache
  
