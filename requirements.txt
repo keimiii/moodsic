@@ -27,7 +27,8 @@ mediapipe==0.10.21
 packaging==25.0
 pandas==2.3.1
 pillow==11.3.0
-protobuf==4.25.8
+protobuf==5.29.5
+tensorboard>=2.20.0
 pyarrow==21.0.0
 pycparser==2.22
 pydeck==0.9.1
@@ -56,3 +57,11 @@ aiohttp
 aiofiles
 pytest
 opencv-python-headless
+torchvision>=0.15.0
+transformers>=4.30.0
+git+https://github.com/openai/CLIP.git
+matplotlib>=3.6.0
+seaborn>=0.12.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+ipywidgets

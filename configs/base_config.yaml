@@ -1,0 +1,137 @@
+# Base Configuration for Continuous V-A Prediction Models
+# Scene Model (FindingEmo) and Face Mood Model (AffectNet)
+
+# Model Configuration
+model:
+  # Model architecture settings
+  backbone: "dinov3_convnext_tiny"  # DINOv3 ConvNext backbone
+  feature_dim: 768                   # DINOv3 feature dimension
+  head_hidden_size: 256             # Emotion head hidden layer size
+  dropout_rate: 0.1                 # Dropout rate in emotion head
+  freeze_backbone: true             # Freeze DINOv3 parameters
+  
+  # Output configuration
+  output_range: [-1, 1]             # V-A output range (symmetric)
+  activation: "tanh"                # Output activation function
+
+# Training Configuration
+training:
+  # Hyperparameters
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_epochs: 100
+  early_stopping_patience: 10
+  
+  # Optimization
+  optimizer: "adam"                 # adam, sgd, adamw
+  scheduler: "reduce_on_plateau"    # cosine, step, reduce_on_plateau
+  scheduler_params:
+    factor: 0.5
+    patience: 5
+    min_lr: 0.00001
+  
+  # Loss function
+  loss_function: "mse"              # mse, huber, smooth_l1
+  loss_weights:
+    valence: 1.0
+    arousal: 1.0
+
+# Data Configuration
+data:
+  # Dataset paths (to be overridden by CLI)
+  affectnet_path: ""                # Path to AffectNet dataset
+  findingemo_path: ""               # Path to FindingEmo dataset
+  
+  # Data splits
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  
+  # Data preprocessing
+  image_size: 224                   # Input image size
+  normalize_mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+  normalize_std: [0.229, 0.224, 0.225]
+  
+  # Data augmentation
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    rotation: 15
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+    gaussian_blur: 0.1
+
+# Hardware Configuration
+hardware:
+  # Device selection
+  device: "auto"                    # auto, cpu, cuda, mps
+  mixed_precision: true             # Enable AMP when supported
+  num_workers: 4                    # DataLoader workers
+  pin_memory: true                  # Pin memory for faster GPU transfer
+
+# Logging Configuration
+logging:
+  # Basic logging
+  level: "INFO"                     # DEBUG, INFO, WARNING, ERROR
+  log_dir: "./logs"
+  experiment_name: ""               # Auto-generated if empty
+  
+  # Progress tracking
+  log_every_n_steps: 50
+  eval_every_n_epochs: 1
+  save_every_n_epochs: 5
+  
+  # TensorBoard (optional)
+  tensorboard:
+    enabled: false
+    log_dir: "./tensorboard_logs"
+    log_images: true
+    log_histograms: false
+
+# Checkpointing Configuration
+checkpointing:
+  save_dir: "./checkpoints"
+  save_best_only: true              # Save only best model
+  monitor_metric: "val_ccc_avg"     # Metric to monitor for best model
+  save_optimizer: true              # Save optimizer state
+  save_scheduler: true              # Save scheduler state
+
+# Evaluation Configuration
+evaluation:
+  # Metrics to compute
+  metrics:
+    - "ccc"                         # Concordance Correlation Coefficient
+    - "rmse"                        # Root Mean Square Error
+    - "mae"                         # Mean Absolute Error
+    - "pearson"                     # Pearson correlation
+  
+  # Evaluation settings
+  compute_per_quadrant: true        # Compute metrics per V-A quadrant
+  save_predictions: true            # Save model predictions
+
+# Reproducibility
+reproducibility:
+  seed: 42                          # Global random seed
+  deterministic: true               # Use deterministic algorithms when possible
+  benchmark: false                  # CUDNN benchmark mode
+
+# Model-specific configurations
+scene_model:
+  model_name: "scene_emotion_model"
+  dataset_type: "findingemo"
+  # Scene-specific augmentations
+  augmentation:
+    crop_scale: [0.8, 1.0]
+    perspective_transform: 0.2
+
+face_model:
+  model_name: "face_mood_model"  
+  dataset_type: "affectnet"
+  # Face-specific augmentations
+  augmentation:
+    face_crop_margin: 0.1
+    brightness_contrast: 0.3

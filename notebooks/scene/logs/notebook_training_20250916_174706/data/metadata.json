@@ -1,0 +1,28 @@
+{
+  "model_name": "notebook_training_20250916_174706",
+  "dataset_name": "findingemo_test",
+  "timestamp": "20250916_211619",
+  "device": "mps",
+  "num_samples": 1651,
+  "processing_time": 32.24041271209717,
+  "samples_per_sec": 51.20902188018567,
+  "experiment_name": "notebook_training_20250916_174706",
+  "training_config": {
+    "learning_rate": 0.0001,
+    "batch_size": 32,
+    "num_epochs": 50,
+    "optimizer": "adamw",
+    "scheduler": "cosine",
+    "early_stopping_patience": 5,
+    "monitor_metric": "va_mae_avg"
+  },
+  "training_summary": {
+    "best_metric": 0.6896367562559831,
+    "total_epochs": 21,
+    "converged": false
+  },
+  "checkpoint_info": {
+    "path": "/Users/kevinmanuel/Documents/NUS-Project-Sem2/REPO/notebooks/checkpoints/scene_clip_vit_b32_frozen_notebook/best_model.pth",
+    "epoch": 15
+  }
+}

@@ -1,0 +1,37 @@
+# Face Mood Model Configuration (AffectNet Dataset)
+# Inherits from base_config.yaml and overrides face-specific settings
+
+# Import base configuration  
+base: "../base_config.yaml"
+
+# Override model name and dataset
+model:
+  model_name: "face_mood_dinov3"
+
+# Face-specific data configuration
+data:
+  dataset_type: "affectnet"
+  # Face images require more careful augmentation
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    rotation: 10                    # Less rotation to preserve facial structure
+    face_crop_margin: 0.1          # Margin around detected face region
+    color_jitter:
+      brightness: 0.25             # Moderate brightness changes
+      contrast: 0.25               # Moderate contrast changes
+      saturation: 0.15             # Conservative saturation
+      hue: 0.05                    # Minimal hue changes
+    gaussian_blur: 0.1             # Slight blur for robustness
+
+# Face-specific training adjustments
+training:
+  batch_size: 32                   # Standard batch size for face images
+  learning_rate: 0.001             # Standard LR for face emotion recognition
+
+# Experiment tracking
+logging:
+  experiment_name: "face_mood_dinov3"
+  
+checkpointing:
+  save_dir: "./checkpoints/face_model"
