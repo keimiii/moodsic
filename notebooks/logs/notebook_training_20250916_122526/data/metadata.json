@@ -1,9 +1,0 @@
-{
-  "model_name": "notebook_training_20250916_122526",
-  "dataset_name": "findingemo_test",
-  "timestamp": "20250916_133109",
-  "device": "mps",
-  "num_samples": 1651,
-  "processing_time": 32.68793702125549,
-  "samples_per_sec": 50.50792893190014
-}

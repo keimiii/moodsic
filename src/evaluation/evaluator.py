@@ -49,6 +49,12 @@ class VAEvaluator:
         self.model_name = model_name
         self.dataset_name = dataset_name
         self.device = device or self._get_device()
+        # Context placeholders (can be enriched by caller)
+        self.experiment_name: Optional[str] = None
+        self.training_config: Dict[str, Any] = {}
+        self.training_summary: Dict[str, Any] = {}
+        self.checkpoint_info: Dict[str, Any] = {}
+        self.extra_metadata: Dict[str, Any] = {}
         
         # Create output directory structure
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -76,6 +82,31 @@ class VAEvaluator:
             "timestamp": timestamp,
             "device": str(self.device)
         }
+
+    def attach_context(self,
+                       experiment_name: Optional[str] = None,
+                       training_config: Optional[Dict[str, Any]] = None,
+                       training_summary: Optional[Dict[str, Any]] = None,
+                       checkpoint_info: Optional[Dict[str, Any]] = None,
+                       extra_metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Attach optional context to be included in saved summaries.
+
+        - experiment_name: Human-readable experiment/run name
+        - training_config: Dict of training hyperparameters/config used
+        - training_summary: Dict of training outcomes (best metric, epochs, converged)
+        - checkpoint_info: Dict with best checkpoint path/epoch, etc.
+        - extra_metadata: Any additional metadata to merge
+        """
+        if experiment_name is not None:
+            self.experiment_name = experiment_name
+        if training_config:
+            self.training_config.update(training_config)
+        if training_summary:
+            self.training_summary.update(training_summary)
+        if checkpoint_info:
+            self.checkpoint_info.update(checkpoint_info)
+        if extra_metadata:
+            self.extra_metadata.update(extra_metadata)
     
     def _get_device(self) -> torch.device:
         """Auto-detect the best available device."""
@@ -336,8 +367,48 @@ class VAEvaluator:
         
         # Save metadata
         metadata_file = self.data_dir / "metadata.json"
+        # Merge attached context into metadata for completeness
+        merged_metadata = {
+            **self.metadata,
+            **({"experiment_name": self.experiment_name} if self.experiment_name else {}),
+            **({"training_config": self.training_config} if self.training_config else {}),
+            **({"training_summary": self.training_summary} if self.training_summary else {}),
+            **({"checkpoint_info": self.checkpoint_info} if self.checkpoint_info else {}),
+            **self.extra_metadata,
+        }
         with open(metadata_file, 'w') as f:
-            json.dump(self.metadata, f, indent=2, default=str)
+            json.dump(merged_metadata, f, indent=2, default=str)
+
+        # Save comprehensive evaluation summary (single file consumers can read)
+        summary = {
+            "experiment_info": {
+                "model_name": self.model_name,
+                "dataset_name": self.dataset_name,
+                "experiment_name": self.experiment_name,
+                "timestamp": self.metadata.get("timestamp"),
+                "device": self.metadata.get("device"),
+            },
+            "evaluation_info": {
+                "num_samples": self.metadata.get("num_samples"),
+                "processing_time": self.metadata.get("processing_time"),
+                "samples_per_sec": self.metadata.get("samples_per_sec"),
+                "results_dir": str(self.output_dir),
+            },
+            # Training context may be partially empty if not provided
+            "training_context": {
+                **({"best_metric": self.training_summary.get("best_metric")} if self.training_summary else {}),
+                **({"total_epochs": self.training_summary.get("total_epochs")} if self.training_summary else {}),
+                **({"converged": self.training_summary.get("converged")} if self.training_summary else {}),
+                **({"monitor_metric": self.training_config.get("monitor_metric")} if self.training_config else {}),
+                **({"best_checkpoint_path": self.checkpoint_info.get("path")} if self.checkpoint_info else {}),
+                **({"best_checkpoint_epoch": self.checkpoint_info.get("epoch")} if self.checkpoint_info else {}),
+            },
+            # Put all computed metrics under one key
+            "metrics": self.metrics,
+        }
+        summary_file = self.data_dir / "evaluation_summary.json"
+        with open(summary_file, 'w') as f:
+            json.dump(summary, f, indent=2, default=str)
         
         print(f"💾 Data saved to: {self.data_dir}")
     
@@ -670,31 +741,72 @@ Performance Summary (V-A Regression):
         if not self.metrics:
             print("❌ No evaluation results available. Run evaluate_model first.")
             return
-        
+        # Map new-style 'va_' metrics to summary values, fallback to legacy keys
+        val_mae = self.metrics.get('va_valence_mae', self.metrics.get('valence_mae', 0.0))
+        aro_mae = self.metrics.get('va_arousal_mae', self.metrics.get('arousal_mae', 0.0))
+        total_mae = self.metrics.get('va_mae_avg', self.metrics.get('total_mae', (val_mae + aro_mae) / 2 if (val_mae or aro_mae) else 0.0))
+
+        val_rmse = self.metrics.get('va_valence_rmse', self.metrics.get('valence_rmse', 0.0))
+        aro_rmse = self.metrics.get('va_arousal_rmse', self.metrics.get('arousal_rmse', 0.0))
+        total_rmse = self.metrics.get('va_rmse_avg', self.metrics.get('total_rmse', (val_rmse + aro_rmse) / 2 if (val_rmse or aro_rmse) else 0.0))
+
+        avg_ccc = self.metrics.get('va_ccc_avg', self.metrics.get('average_ccc', 0.0))
+
+        # Correlations: prefer Pearson
+        val_corr = self.metrics.get('va_valence_pearson', self.metrics.get('valence_correlation', 0.0))
+        aro_corr = self.metrics.get('va_arousal_pearson', self.metrics.get('arousal_correlation', 0.0))
+
+        # Quadrant accuracies: compute from evaluation_data if not present
+        overall_acc = self.metrics.get('overall_quadrant_accuracy', None)
+        per_quad = {}
+        if overall_acc is None and self.evaluation_data:
+            try:
+                import pandas as _pd
+                _df = _pd.DataFrame(self.evaluation_data)
+                if {'quadrant_true', 'quadrant_pred'}.issubset(_df.columns):
+                    overall_acc = float((_df['quadrant_true'] == _df['quadrant_pred']).mean())
+                    for quad in ['angry', 'sad', 'calm', 'happy']:
+                        _qd = _df[_df['quadrant_true'] == quad]
+                        if len(_qd) > 0:
+                            per_quad[quad] = {
+                                'acc': float((_qd['quadrant_true'] == _qd['quadrant_pred']).mean()),
+                                'count': int(len(_qd))
+                            }
+            except Exception:
+                overall_acc = overall_acc or 0.0
+        overall_acc = overall_acc if overall_acc is not None else 0.0
+
         print(f"\n📈 Overall Performance:")
-        print(f"  Total MAE: {self.metrics.get('total_mae', 0):.4f}")
-        print(f"  Total RMSE: {self.metrics.get('total_rmse', 0):.4f}")
-        print(f"  Average CCC: {self.metrics.get('average_ccc', 0):.4f}")
-        print(f"  Overall Quadrant Accuracy: {self.metrics.get('overall_quadrant_accuracy', 0)*100:.1f}%")
-        
+        print(f"  Total MAE: {total_mae:.4f}")
+        print(f"  Total RMSE: {total_rmse:.4f}")
+        print(f"  Average CCC: {avg_ccc:.4f}")
+        print(f"  Overall Quadrant Accuracy: {overall_acc*100:.1f}%")
+
         print(f"\n📊 Valence Performance:")
-        print(f"  MAE: {self.metrics.get('valence_mae', 0):.4f}")
-        print(f"  RMSE: {self.metrics.get('valence_rmse', 0):.4f}")
-        print(f"  CCC: {self.metrics.get('valence_ccc', 0):.4f}")
-        print(f"  Correlation: {self.metrics.get('valence_correlation', 0):.4f}")
-        
+        print(f"  MAE: {val_mae:.4f}")
+        print(f"  RMSE: {val_rmse:.4f}")
+        print(f"  CCC: {self.metrics.get('va_valence_ccc', self.metrics.get('valence_ccc', 0.0)):.4f}")
+        print(f"  Correlation (Pearson): {val_corr:.4f}")
+
         print(f"\n📊 Arousal Performance:")
-        print(f"  MAE: {self.metrics.get('arousal_mae', 0):.4f}")
-        print(f"  RMSE: {self.metrics.get('arousal_rmse', 0):.4f}")
-        print(f"  CCC: {self.metrics.get('arousal_ccc', 0):.4f}")
-        print(f"  Correlation: {self.metrics.get('arousal_correlation', 0):.4f}")
-        
+        print(f"  MAE: {aro_mae:.4f}")
+        print(f"  RMSE: {aro_rmse:.4f}")
+        print(f"  CCC: {self.metrics.get('va_arousal_ccc', self.metrics.get('arousal_ccc', 0.0)):.4f}")
+        print(f"  Correlation (Pearson): {aro_corr:.4f}")
+
         print(f"\n🎭 Quadrant Performance:")
-        for quadrant in ['angry', 'sad', 'calm', 'happy']:
-            if f'{quadrant}_accuracy' in self.metrics:
-                acc = self.metrics[f'{quadrant}_accuracy'] * 100
-                count = self.metrics[f'{quadrant}_count']
-                print(f"  {quadrant.title()}: {acc:.1f}% accuracy ({count:,} samples)")
+        if per_quad:
+            for quadrant in ['angry', 'sad', 'calm', 'happy']:
+                if quadrant in per_quad:
+                    acc = per_quad[quadrant]['acc'] * 100
+                    count = per_quad[quadrant]['count']
+                    print(f"  {quadrant.title()}: {acc:.1f}% accuracy ({count:,} samples)")
+        else:
+            for quadrant in ['angry', 'sad', 'calm', 'happy']:
+                if f'{quadrant}_accuracy' in self.metrics:
+                    acc = self.metrics[f'{quadrant}_accuracy'] * 100
+                    count = self.metrics.get(f'{quadrant}_count', 0)
+                    print(f"  {quadrant.title()}: {acc:.1f}% accuracy ({count:,} samples)")
         
         print(f"\n⚡ Processing Information:")
         print(f"  Samples: {self.metadata.get('num_samples', 0):,}")

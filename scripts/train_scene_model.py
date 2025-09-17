@@ -123,12 +123,55 @@ class SceneModelTrainer:
             backbone_type=backbone_type
         )
         
+        # Optional: subset each split by a fraction or fixed count for quick dev runs
+        def _coerce_optional_number(x, int_only=False):
+            if x is None:
+                return None
+            # Handle strings like 'null', 'none', ''
+            if isinstance(x, str):
+                xs = x.strip().lower()
+                if xs in ('', 'none', 'null', 'nan'):
+                    return None
+                try:
+                    val = float(xs)
+                    return int(val) if int_only else val
+                except Exception:
+                    return None
+            # Already numeric
+            if isinstance(x, (int, float)):
+                return int(x) if int_only else x
+            return None
+
+        subset_fraction = _coerce_optional_number(getattr(self.config.data, 'subset_fraction', None))
+        max_samples_per_split = _coerce_optional_number(getattr(self.config.data, 'max_samples_per_split', None), int_only=True)
+        max_by_split = {s: None for s in ['train', 'val', 'test']}
+        if isinstance(max_samples_per_split, (int, float)) and max_samples_per_split > 0:
+            # Same cap for all splits
+            max_by_split = {s: int(max_samples_per_split) for s in max_by_split}
+            self.logger.info(f"🔢 Using max_samples_per_split={int(max_samples_per_split)} for all splits")
+        elif isinstance(subset_fraction, (int, float)) and 0 < subset_fraction <= 1:
+            # Try to derive per-split sizes from saved split indices
+            try:
+                split_file = Path(self.config.data.findingemo_path) / 'split_indices.json'
+                if split_file.exists():
+                    import json as _json
+                    with open(split_file, 'r') as _f:
+                        _splits = _json.load(_f)['splits']
+                    for s in ['train', 'val', 'test']:
+                        max_by_split[s] = max(1, int(len(_splits.get(s, [])) * subset_fraction))
+                    self.logger.info(f"🔢 Using subset_fraction={subset_fraction:.2f} -> per-split caps: {max_by_split}")
+                else:
+                    self.logger.info(f"ℹ️ subset_fraction={subset_fraction:.2f} provided, but no split_indices.json found; caps will be applied after splits are created")
+            except Exception as _e:
+                self.logger.warning(f"⚠️ Failed to derive subset sizes: {_e}")
+        
         # Create datasets with stratified splits
         self.train_dataset = create_dataset(
             dataset_type=self.config.data.dataset_type,
             root_path=self.config.data.findingemo_path,
             split="train",
             transform=train_transform,
+            max_samples=max_by_split.get('train'),
             stratify_on=self.config.data.stratify_on,
             save_split_indices=self.config.data.save_split_indices,
             load_split_indices=self.config.data.load_split_indices
@@ -139,6 +182,7 @@ class SceneModelTrainer:
             root_path=self.config.data.findingemo_path,
             split="val",
             transform=val_transform,
+            max_samples=max_by_split.get('val'),
             stratify_on=self.config.data.stratify_on,
             save_split_indices=self.config.data.save_split_indices,
             load_split_indices=self.config.data.load_split_indices
@@ -149,6 +193,7 @@ class SceneModelTrainer:
             root_path=self.config.data.findingemo_path,
             split="test",
             transform=val_transform,
+            max_samples=max_by_split.get('test'),
             stratify_on=self.config.data.stratify_on,
             save_split_indices=self.config.data.save_split_indices,
             load_split_indices=self.config.data.load_split_indices
@@ -538,28 +583,25 @@ class SceneModelTrainer:
         }
     
     def _save_checkpoint(self, epoch, is_best=False):
-        """Save model checkpoint."""
+        """Save model checkpoint as .pth (full) and .pkl (weights-only)."""
+        from src.utils.checkpoints import save_checkpoint_bundle
         checkpoint_dir = Path(self.config.checkpointing.save_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'best_metric': self.best_metric,
-            'config': self.config.to_dict()
-        }
-        
-        if self.scheduler:
-            checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
-        
+
+        paths = save_checkpoint_bundle(
+            checkpoint_dir=checkpoint_dir,
+            epoch=epoch,
+            model=self.model,
+            optimizer=self.optimizer,
+            best_metric=self.best_metric,
+            config=self.config,
+            scheduler=self.scheduler,
+            is_best=is_best,
+        )
         if is_best:
-            checkpoint_path = checkpoint_dir / "best_model.pth"
-            self.logger.info(f"💾 Saving best model to {checkpoint_path}")
+            self.logger.info(f"💾 Saved best model: {paths['pth']} and {paths['pkl']}")
         else:
-            checkpoint_path = checkpoint_dir / f"checkpoint_epoch_{epoch:03d}.pth"
-        
-        torch.save(checkpoint, checkpoint_path)
+            self.logger.debug(f"💾 Saved checkpoint: {paths['pth']} and {paths['pkl']}")
     
     def _evaluate_test_set(self):
         """Evaluate on test set."""
@@ -622,6 +664,16 @@ def main():
             return 1
         
         config = load_config(args.config, args)
+
+        # Force checkpoints to notebooks/checkpoints/<model_name>
+        try:
+            from pathlib import Path as _Path
+            _model_name = getattr(config.model, 'model_name', 'model')
+            _ckpt_root = _Path('notebooks') / 'checkpoints'
+            _ckpt_root.mkdir(parents=True, exist_ok=True)
+            config.checkpointing.save_dir = str(_ckpt_root / _model_name)
+        except Exception:
+            pass
         
         # Validate FindingEmo path
         if not config.data.findingemo_path:
@@ -742,6 +794,36 @@ def main():
                 output_dir=str(_run_log_dir),
                 device=device_manager.device,
                 flat_output=True,
+            )
+
+            # Attach comprehensive context so evaluator writes a full summary
+            try:
+                _train_cfg = {
+                    'learning_rate': float(config.training.learning_rate) if isinstance(config.training.learning_rate, (int, float)) else str(config.training.learning_rate),
+                    'batch_size': int(config.training.batch_size),
+                    'num_epochs': int(config.training.num_epochs),
+                    'optimizer': getattr(config.training, 'optimizer', None),
+                    'scheduler': getattr(config.training, 'scheduler', None),
+                    'early_stopping_patience': getattr(config.training.early_stopping, 'patience', None),
+                    'monitor_metric': getattr(config.training.early_stopping, 'monitor_metric', None),
+                }
+            except Exception:
+                _train_cfg = {}
+
+            _train_summary = {
+                'best_metric': float(results.get('best_metric', trainer.best_metric if hasattr(trainer, 'best_metric') else float('nan'))),
+                'total_epochs': int(results.get('total_epochs', trainer.current_epoch + 1 if hasattr(trainer, 'current_epoch') else 0)),
+                'converged': bool(getattr(trainer, 'patience_counter', 0) < getattr(config.training.early_stopping, 'patience', 0)) if hasattr(config.training, 'early_stopping') else None,
+            }
+            _ckpt_info = {
+                'path': str(best_ckpt) if 'best_ckpt' in locals() and best_ckpt else None,
+                'epoch': int(_ckpt.get('epoch')) if '_ckpt' in locals() and isinstance(_ckpt, dict) and 'epoch' in _ckpt else None,
+            }
+            evaluator.attach_context(
+                experiment_name=model_name,
+                training_config=_train_cfg,
+                training_summary=_train_summary,
+                checkpoint_info=_ckpt_info,
             )
 
             # Adapter: our models return dict with 'valence'/'arousal'

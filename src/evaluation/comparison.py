@@ -30,23 +30,46 @@ class ModelComparison:
         """
         result_path = Path(result_dir)
         
-        # Load metadata and metrics
+        # Prefer comprehensive summary if available
+        summary_file = result_path / "data" / "evaluation_summary.json"
         metadata_file = result_path / "data" / "metadata.json"
         metrics_file = result_path / "data" / "metrics.json"
         data_file = result_path / "data" / "evaluation_data.csv"
-        
-        if not all(f.exists() for f in [metadata_file, metrics_file, data_file]):
-            raise FileNotFoundError(f"Required files not found in {result_dir}")
-        
-        with open(metadata_file, 'r') as f:
-            metadata = json.load(f)
-        
-        with open(metrics_file, 'r') as f:
-            metrics = json.load(f)
-        
-        data = pd.read_csv(data_file)
-        
-        model_name = model_alias or metadata.get('model_name', 'Unknown')
+
+        if summary_file.exists():
+            with open(summary_file, 'r') as f:
+                summary = json.load(f)
+            # Extract comparable structures
+            exp = summary.get('experiment_info', {})
+            eval_info = summary.get('evaluation_info', {})
+            metrics = summary.get('metrics', {})
+            # Flattened metadata for downstream usage
+            metadata = {
+                'model_name': exp.get('model_name', 'Unknown'),
+                'dataset_name': exp.get('dataset_name', 'Unknown'),
+                'experiment_name': exp.get('experiment_name', None),
+                'num_samples': eval_info.get('num_samples', 0),
+                'processing_time': eval_info.get('processing_time', None),
+                'samples_per_sec': eval_info.get('samples_per_sec', None),
+            }
+        else:
+            # Fall back to legacy files (must exist)
+            if not all(f.exists() for f in [metadata_file, metrics_file, data_file]):
+                raise FileNotFoundError(f"Required files not found in {result_dir}")
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            with open(metrics_file, 'r') as f:
+                metrics = json.load(f)
+
+        # Load data CSV if present
+        if data_file.exists():
+            data = pd.read_csv(data_file)
+        else:
+            # Provide empty DataFrame if missing (keeps API stable)
+            data = pd.DataFrame()
+
+        # Model naming: prefer alias, then experiment name, then model_name
+        model_name = model_alias or metadata.get('experiment_name') or metadata.get('model_name', 'Unknown')
         
         self.models.append(model_name)
         self.results.append({
@@ -85,19 +108,26 @@ class ModelComparison:
         for result in self.results:
             metrics = result['metrics']
             metadata = result['metadata']
-            
+
+            def getm(*keys, default=0.0):
+                for k in keys:
+                    if k in metrics:
+                        return metrics[k]
+                return default
+
             row = {
                 'Model': result['name'],
                 'Dataset': metadata.get('dataset_name', 'Unknown'),
                 'Samples': metadata.get('num_samples', 0),
-                'Valence MAE': metrics.get('valence_mae', 0),
-                'Arousal MAE': metrics.get('arousal_mae', 0),
-                'Total MAE': metrics.get('total_mae', 0),
-                'Valence CCC': metrics.get('valence_ccc', 0),
-                'Arousal CCC': metrics.get('arousal_ccc', 0),
-                'Average CCC': metrics.get('average_ccc', 0),
-                'Valence Correlation': metrics.get('valence_correlation', 0),
-                'Arousal Correlation': metrics.get('arousal_correlation', 0),
+                # Prefer new 'va_' keys, fallback to legacy keys
+                'Valence MAE': getm('va_valence_mae', 'valence_mae', default=0),
+                'Arousal MAE': getm('va_arousal_mae', 'arousal_mae', default=0),
+                'Total MAE': getm('va_mae_avg', 'total_mae', default=0),
+                'Valence CCC': getm('va_valence_ccc', 'valence_ccc', default=0),
+                'Arousal CCC': getm('va_arousal_ccc', 'arousal_ccc', default=0),
+                'Average CCC': getm('va_ccc_avg', 'average_ccc', default=0),
+                'Valence Correlation': getm('va_valence_pearson', 'valence_correlation', default=0),
+                'Arousal Correlation': getm('va_arousal_pearson', 'arousal_correlation', default=0),
                 'Quadrant Accuracy': metrics.get('overall_quadrant_accuracy', 0),
                 'Processing Speed (samples/sec)': metadata.get('samples_per_sec', 0)
             }

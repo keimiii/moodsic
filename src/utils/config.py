@@ -248,6 +248,12 @@ def create_arg_parser() -> argparse.ArgumentParser:
     # Resume training
     parser.add_argument('--resume', type=str,
                        help='Path to checkpoint to resume from')
+
+    # Data overrides
+    parser.add_argument('--data.subset_fraction', type=float,
+                       help='Use only a fraction of each split (0<frac<=1)')
+    parser.add_argument('--data.max_samples_per_split', type=int,
+                       help='Cap number of samples per split (train/val/test)')
     
     # Additional flags
     parser.add_argument('--dry_run', action='store_true',
