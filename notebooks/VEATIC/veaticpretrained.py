@@ -221,12 +221,11 @@ class VEATICBaselinePredictor:
         self.model.to(self.device)
         self.model.eval()
         
-        # Define transforms (should match training preprocessing)
+        # Define transforms (should match training preprocessing exactly)
         self.transform = transforms.Compose([
             transforms.Resize((640, 480)),  # Match training resolution
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                               std=[0.229, 0.224, 0.225])
+            transforms.ToTensor(),          # Converts to [0, 1]
+            transforms.Lambda(lambda x: x * 2.0 - 1.0)  # Convert [0,1] to [-1,1] like training
         ])
         
         print(f"VEATIC baseline model loaded on {self.device}")
@@ -331,11 +330,15 @@ class VEATICBaselinePredictor:
             predictions = self.model(frames_tensor)
             predictions = predictions.cpu().numpy()[0]  # Remove batch dimension
         
-        valence, arousal = predictions[0], predictions[1]
+        # Apply tanh to constrain to [-1, 1] range (likely missing from training)
+        valence = float(np.tanh(predictions[0]))
+        arousal = float(np.tanh(predictions[1]))
         
         return {
-            'valence': float(valence),
-            'arousal': float(arousal),
+            'valence': valence,
+            'arousal': arousal,
+            'valence_raw': float(predictions[0]),
+            'arousal_raw': float(predictions[1]),
             'video_path': video_path,
             'num_frames_used': len(frames),
             'predictions_raw': predictions
