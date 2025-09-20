@@ -1,8 +1,8 @@
 # Runtime Pipeline
 
 - [ ] Implement PERCEIVE → STABILIZE → MATCH end-to-end
-- [x] Enable MC Dropout/TT sampling for uncertainty in PERCEIVE
-- [x] Integrate scene–face fusion with variance-weighted averaging
+- [✅] Enable MC Dropout/TT sampling for uncertainty in PERCEIVE
+- [✅] Integrate scene–face fusion with variance-weighted averaging
 - [ ] Wire stabilized outputs into k-NN music retrieval with dwell-time
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
