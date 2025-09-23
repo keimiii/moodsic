@@ -95,6 +95,9 @@ class SceneFaceFusion:
         stabilizer_alpha: float = 0.7,
         uncertainty_threshold: float = 0.4,
         stabilizer_window: int = 60,
+        # Optional guards for variance-weighted fusion dominance
+        variance_floor: Optional[float] = 1e-3,
+        max_weight_ratio: Optional[float] = None,
     ) -> None:
         """
         Initialize the fusion module and (optionally) enable stability guardrails.
@@ -160,6 +163,13 @@ class SceneFaceFusion:
             )
             if bool(enable_stabilizer)
             else None
+        )
+        # Variance-weighted fusion guardrails
+        self.variance_floor = (
+            float(variance_floor) if variance_floor is not None else None
+        )
+        self.max_weight_ratio = (
+            float(max_weight_ratio) if max_weight_ratio is not None else None
         )
 
     # ---- Public API ----
@@ -331,8 +341,24 @@ class SceneFaceFusion:
             and self._finite_pos(v1)
             and self._finite_pos(v2)
         ):
-            w1 = 1.0 / (float(v1) + 1e-6)
-            w2 = 1.0 / (float(v2) + 1e-6)
+            vv1 = float(v1)
+            vv2 = float(v2)
+            # Guard against near-zero variances dominating the blend
+            if self.variance_floor is not None:
+                vv1 = max(vv1, self.variance_floor)
+                vv2 = max(vv2, self.variance_floor)
+            w1 = 1.0 / (vv1 + 1e-6)
+            w2 = 1.0 / (vv2 + 1e-6)
+            # Optionally cap dominance ratio between weights
+            if self.max_weight_ratio is not None and self.max_weight_ratio > 0:
+                mn = max(min(w1, w2), 1e-12)
+                mx = max(w1, w2)
+                ratio = mx / mn if mn > 0 else float("inf")
+                if math.isfinite(ratio) and ratio > self.max_weight_ratio:
+                    if w1 >= w2:
+                        w1 = self.max_weight_ratio * w2
+                    else:
+                        w2 = self.max_weight_ratio * w1
             total = w1 + w2
             if total <= 0.0 or not math.isfinite(total):
                 # Safety fallback to fixed weights
