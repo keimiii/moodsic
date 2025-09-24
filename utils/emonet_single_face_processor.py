@@ -16,6 +16,8 @@ class EmoNetSingleFaceProcessor:
     - Internally converts to RGB for MediaPipe detection.
     - Selects the primary face per frame using: score * sqrt(area) * (0.7 + 0.3 * center_proximity).
     - Returns a padded BGR crop and its bbox with a combined score.
+    - Uses MediaPipe's long-range face detector by default (model_selection=1)
+      for better recall on distant faces.
 
     Notes:
     - When MediaPipe is unavailable, the processor remains importable and
@@ -28,10 +30,12 @@ class EmoNetSingleFaceProcessor:
         min_detection_confidence: float = 0.5,
         padding_ratio: float = 0.2,
         output_size: Optional[Tuple[int, int]] = (256, 256),
+        model_selection: int = 1,
     ) -> None:
         self.min_detection_confidence = float(min_detection_confidence)
         self.padding_ratio = float(padding_ratio)
         self.output_size = output_size
+        self.model_selection = int(model_selection)
 
         # Lazy / safe import for environments without mediapipe installed yet.
         self._mp = None
@@ -41,7 +45,8 @@ class EmoNetSingleFaceProcessor:
 
             self._mp = mp
             self._detector = mp.solutions.face_detection.FaceDetection(
-                min_detection_confidence=self.min_detection_confidence
+                model_selection=self.model_selection,
+                min_detection_confidence=self.min_detection_confidence,
             )
         except Exception as e:  # pragma: no cover - environment dependent
             logging.getLogger(__name__).debug(
@@ -198,4 +203,3 @@ class EmoNetSingleFaceProcessor:
         abs_h = max(0, y1 - y0)
 
         return x0, y0, abs_w, abs_h
-
