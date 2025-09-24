@@ -223,8 +223,14 @@ class EmoNetAdapter:
         model = EmoNet(n_expression=self.n_classes)
         model.eval()
 
-        # Load checkpoint
-        ckpt_path = self._select_checkpoint(Path(ckpt_dir))
+        # Load checkpoint — resolve relative paths from callers (e.g., notebooks/)
+        ckpt_dir_path = Path(ckpt_dir)
+        if not ckpt_dir_path.is_absolute() and not ckpt_dir_path.exists():
+            resolved = (project_root / ckpt_dir_path).resolve()
+            if resolved.exists():
+                ckpt_dir_path = resolved
+
+        ckpt_path = self._select_checkpoint(ckpt_dir_path)
         if ckpt_path is not None and ckpt_path.exists():
             try:
                 state = torch.load(ckpt_path, map_location="cpu")
@@ -238,7 +244,7 @@ class EmoNetAdapter:
         else:
             logging.getLogger(__name__).warning(
                 "No EmoNet checkpoint found in %s; using random initialization.",
-                ckpt_dir,
+                ckpt_dir_path,
             )
 
         return model
