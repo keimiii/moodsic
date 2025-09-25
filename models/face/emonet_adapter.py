@@ -79,6 +79,7 @@ class EmoNetAdapter:
         n_classes: int = 8,
         device: str = "auto",
         tta: int = 5,
+        tta_seed_mode: str = "content",
         calibration_checkpoint: Optional[str] = None,
     ) -> None:
         if torch is None:
@@ -90,6 +91,12 @@ class EmoNetAdapter:
         self.tta_default = int(tta)
         self.device = self._select_device(device)
         self.scale_aligner = EmotionScaleAligner(strict=False)
+        self.tta_seed_mode = (tta_seed_mode or "content").lower()
+        if self.tta_seed_mode not in {"content", "random"}:
+            logging.getLogger(__name__).warning(
+                "Unknown tta_seed_mode '%s'; falling back to 'content'", self.tta_seed_mode
+            )
+            self.tta_seed_mode = "content"
 
         # Prepare vendored EmoNet import from models/emonet
         self._emonet = self._load_emonet_model(ckpt_dir)
@@ -121,7 +128,10 @@ class EmoNetAdapter:
 
     # ---------- Public API ----------
     def predict(
-        self, face_bgr: np.ndarray, tta: Optional[int] = None
+        self,
+        face_bgr: np.ndarray,
+        tta: Optional[int] = None,
+        seed: Optional[int] = None,
     ) -> Tuple[float, float, Tuple[float, float]]:
         """
         Run EmoNet inference on a single BGR face crop.
@@ -152,8 +162,16 @@ class EmoNetAdapter:
         aligned_bgr = self._align_face_by_eyes_mediapipe(face_bgr)
         base_bgr_256 = cv2.resize(aligned_bgr, (256, 256))
 
+        # Determine RNG seed for TTA variants if not provided by caller
+        effective_seed = seed
+        if effective_seed is None:
+            if self.tta_seed_mode == "content":
+                effective_seed = int(np.uint32(base_bgr_256.sum()))
+            elif self.tta_seed_mode == "random":
+                effective_seed = int(np.random.SeedSequence().generate_state(1)[0])
+
         # Build augmented variants (always include original; include flip; add scale/crop jitter)
-        batch_chw = self._build_tta_batch(base_bgr_256, n_tta)
+        batch_chw = self._build_tta_batch(base_bgr_256, n_tta, effective_seed)
 
         # Convert to torch batch
         tensor = torch.from_numpy(batch_chw).to(self.device)
@@ -345,7 +363,9 @@ class EmoNetAdapter:
             return face_bgr
 
     # --------- TTA helpers ---------
-    def _build_tta_batch(self, base_bgr_256: np.ndarray, n_tta: int) -> np.ndarray:
+    def _build_tta_batch(
+        self, base_bgr_256: np.ndarray, n_tta: int, seed: Optional[int]
+    ) -> np.ndarray:
         """
         Build a batch of CHW images in [0,1] with TTA variants:
         - Always include original
@@ -364,16 +384,14 @@ class EmoNetAdapter:
         if n_tta >= 2:
             variants.append(cv2.flip(base_bgr_256, 1))  # horizontal flip
 
-        # Deterministic RNG seed per call, derived from image content
-        # Using uint32 sum keeps it fast and stable across runs
-        seed = int(np.uint32(base_bgr_256.sum()))
-        rng = np.random.RandomState(seed)
+        # RNG controlling augmentation jitter (caller can override seed)
+        rng = np.random.default_rng(seed)
 
         # Fill remaining slots with scale/crop jitter
         needed = max(0, n_tta - len(variants))
         for _ in range(needed):
             # Scale factor in [0.96, 1.04]
-            scale = 1.0 + (rng.rand() * 0.08 - 0.04)
+            scale = 1.0 + (rng.random() * 0.08 - 0.04)
             jittered = self._scale_jitter_center(base_bgr_256, scale)
             variants.append(jittered)
 

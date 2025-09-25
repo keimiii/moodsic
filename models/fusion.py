@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from collections import deque
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
 import numpy as np
 
@@ -29,6 +29,14 @@ class EmotionPrediction:
 
 
 @dataclass
+class FaceSample:
+    bbox: Tuple[int, int, int, int]
+    score: float
+    valence: float
+    arousal: float
+
+
+@dataclass
 class FusionResult:
     """Outputs of the fusion step for one frame.
 
@@ -47,6 +55,8 @@ class FusionResult:
     # Optional stability metrics (post-fusion EMA with uncertainty gating)
     stability_variance: Optional[Tuple[float, float]] = None
     stability_jitter: Optional[Tuple[float, float]] = None
+    # Optional per-face sample metadata (for overlays/debugging)
+    face_samples: Optional[List[FaceSample]] = None
 
 
 class SceneFaceFusion:
@@ -86,6 +96,11 @@ class SceneFaceFusion:
         use_variance_weighting: bool = True,
         scene_mc_samples: int = 5,
         face_tta: int = 5,
+        face_mc_samples: int = 1,
+        face_sampling: str = "topk",
+        face_sampling_temperature: float = 1.0,
+        face_sampling_seed: Optional[int] = None,
+        face_tta_mode: str = "auto",
         # Optional gating to improve stability under occlusion/low light
         face_score_threshold: Optional[float] = None,
         face_max_sigma: Optional[float] = None,
@@ -144,6 +159,19 @@ class SceneFaceFusion:
         self.use_variance_weighting = bool(use_variance_weighting)
         self.scene_mc_samples = int(scene_mc_samples)
         self.face_tta = int(face_tta)
+        self.face_mc_samples = max(1, int(face_mc_samples))
+        self.face_sampling = (face_sampling or "topk").lower()
+        if self.face_sampling not in {"topk", "weighted"}:
+            self.face_sampling = "topk"
+        self.face_sampling_temperature = float(face_sampling_temperature)
+        self.face_tta_mode = (face_tta_mode or "auto").lower()
+        if self.face_tta_mode not in {"auto", "random", "deterministic"}:
+            self.face_tta_mode = "auto"
+        self._face_rng: Optional[np.random.Generator] = (
+            np.random.default_rng(int(face_sampling_seed))
+            if face_sampling_seed is not None
+            else None
+        )
         # Gating thresholds (disabled by default)
         self.face_score_threshold = (
             float(face_score_threshold) if face_score_threshold is not None else None
@@ -202,30 +230,112 @@ class SceneFaceFusion:
         face_pred = None
         face_bbox = None
         face_score = 0.0
+        face_samples_meta: List[FaceSample] = []
         if self.face_processor is not None and self.face_expert is not None:
             try:
-                face_crop, bbox, score = self.face_processor.extract_primary_face(
-                    frame_bgr
+                rng = self._face_rng if self._face_rng is not None else np.random.default_rng()
+                sampling_seed = None
+                if self.face_sampling == "weighted":
+                    sampling_seed = int(rng.integers(0, 2**32 - 1))
+                face_candidates = self.face_processor.extract_faces(
+                    frame_bgr,
+                    max_faces=self.face_mc_samples,
+                    sampling=self.face_sampling,
+                    temperature=self.face_sampling_temperature,
+                    seed=sampling_seed,
                 )
-                face_bbox = bbox
-                face_score = float(score or 0.0)
-                if face_crop is not None and face_crop.size > 0:
+
+                face_vals = []
+                face_ars = []
+                face_var_vals = []
+                face_var_ars = []
+                face_scores = []
+                face_bboxes = []
+
+                for crop, bbox, score in face_candidates:
+                    if crop is None or crop.size == 0:
+                        continue
+                    tta_seed = None
+                    if self.face_tta_mode == "random":
+                        tta_seed = int(rng.integers(0, 2**32 - 1))
+                    elif self.face_tta_mode == "auto" and (
+                        self.face_sampling == "weighted" or self.face_mc_samples > 1
+                    ):
+                        tta_seed = int(rng.integers(0, 2**32 - 1))
+
                     fv, fa, (fvv, fva) = self.face_expert.predict(
-                        face_crop, tta=self.face_tta
+                        crop, tta=self.face_tta, seed=tta_seed
                     )
+
+                    fv = float(fv)
+                    fa = float(fa)
+                    fvv = float(fvv)
+                    fva = float(fva)
+
+                    if not math.isfinite(fvv) or fvv < 0.0:
+                        fvv = 0.0
+                    if not math.isfinite(fva) or fva < 0.0:
+                        fva = 0.0
+
+                    face_vals.append(fv)
+                    face_ars.append(fa)
+                    face_var_vals.append(fvv)
+                    face_var_ars.append(fva)
+                    face_scores.append(float(score))
+                    face_bboxes.append(bbox)
+                    try:
+                        face_samples_meta.append(
+                            FaceSample(
+                                bbox=bbox,
+                                score=float(score),
+                                valence=fv,
+                                arousal=fa,
+                            )
+                        )
+                    except Exception:
+                        # Defensive: skip metadata issues without breaking inference
+                        pass
+
+                if face_vals:
+                    mean_v = float(np.mean(face_vals))
+                    mean_a = float(np.mean(face_ars))
+
+                    var_samples_v = float(np.var(face_vals, ddof=1)) if len(face_vals) > 1 else 0.0
+                    var_samples_a = float(np.var(face_ars, ddof=1)) if len(face_ars) > 1 else 0.0
+
+                    mean_pred_var_v = float(np.mean(face_var_vals)) if face_var_vals else 0.0
+                    mean_pred_var_a = float(np.mean(face_var_ars)) if face_var_ars else 0.0
+
+                    total_var_v = max(0.0, mean_pred_var_v + var_samples_v)
+                    total_var_a = max(0.0, mean_pred_var_a + var_samples_a)
+
                     face_pred = EmotionPrediction(
-                        valence=float(fv),
-                        arousal=float(fa),
-                        var_valence=float(fvv) if self._finite_pos(fvv) else None,
-                        var_arousal=float(fva) if self._finite_pos(fva) else None,
+                        valence=mean_v,
+                        arousal=mean_a,
+                        var_valence=total_var_v if math.isfinite(total_var_v) else None,
+                        var_arousal=total_var_a if math.isfinite(total_var_a) else None,
                         valid=True,
                     )
+
+                    # Metadata: prefer highest-score bbox for overlays
+                    best_idx = 0
+                    face_bbox = face_bboxes[best_idx] if face_bboxes else None
+                    face_score = float(np.mean(face_scores)) if face_scores else 0.0
+
                     # Apply optional gating for robustness
                     if self.face_score_threshold is not None and face_score < self.face_score_threshold:
                         face_pred.valid = False
                     if self.face_max_sigma is not None:
-                        sig_v = math.sqrt(max(face_pred.var_valence, 0.0)) if face_pred.var_valence is not None else float("inf")
-                        sig_a = math.sqrt(max(face_pred.var_arousal, 0.0)) if face_pred.var_arousal is not None else float("inf")
+                        sig_v = (
+                            math.sqrt(max(face_pred.var_valence, 0.0))
+                            if face_pred.var_valence is not None
+                            else float("inf")
+                        )
+                        sig_a = (
+                            math.sqrt(max(face_pred.var_arousal, 0.0))
+                            if face_pred.var_arousal is not None
+                            else float("inf")
+                        )
                         if sig_v > self.face_max_sigma or sig_a > self.face_max_sigma:
                             face_pred.valid = False
                     if self.brightness_threshold is not None:
@@ -236,6 +346,7 @@ class SceneFaceFusion:
                     face_pred = EmotionPrediction(0.0, 0.0, None, None, valid=False)
             except Exception:
                 face_pred = EmotionPrediction(0.0, 0.0, None, None, valid=False)
+                face_samples_meta = []
 
         # Fuse
         fused = self._fuse(scene_pred, face_pred)
@@ -275,6 +386,7 @@ class SceneFaceFusion:
             face_score=face_score,
             stability_variance=stability_variance,
             stability_jitter=stability_jitter,
+            face_samples=face_samples_meta if face_samples_meta else None,
         )
 
     # ---- Internals ----
@@ -464,6 +576,7 @@ class _AdaptiveStabilizer:
 
 __all__ = [
     "EmotionPrediction",
+    "FaceSample",
     "FusionResult",
     "SceneFaceFusion",
 ]

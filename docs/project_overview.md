@@ -65,7 +65,7 @@ This shared measurement system enables direct emotion mapping between video and 
 
 **The Scene Model** examines entire frames - lighting, colors, environment - providing context about overall mood. However, it can be misled by environmental factors.
 
-**The Face Expert (EmoNet)** focuses exclusively on facial expressions, providing direct emotional signals. This grounds predictions in actual human expressions rather than just environmental cues.
+**The Face Expert (EmoNet)** focuses exclusively on facial expressions, providing direct emotional signals. A MediaPipe-based detector (with an OpenCV Haar cascade fallback) surfaces multiple candidate faces per frame; we randomly sample up to `face_mc_samples` crops, align them, and run EmoNet with stochastic test-time augmentation so both intra-face and inter-face uncertainty are captured. The cascade contributes only when it finds additional, non-overlapping faces—it never fabricates extra crops when the image truly contains a single person. This grounds predictions in actual human expressions rather than just environmental cues and exposes how much the system agrees across different people in the scene.
 
 Training these separately allows each model to specialize, learning distinct patterns relevant to their focus area.
 
@@ -75,7 +75,7 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 
 **The Runtime Pipeline: PERCEIVE → STABILIZE → MATCH**
 
-**PERCEIVE**: Analyzes each video frame using both models, extracting valence-arousal values with uncertainty estimates through Monte Carlo Dropout (multiple predictions with slight variations).
+**PERCEIVE**: Analyzes each video frame using both models. The scene adapter uses MC Dropout, while the face pathway samples multiple detections (MediaPipe + Haar fallback) and runs EmoNet with stochastic TTA, returning mean valence–arousal plus variance that reflects both crop-level noise and which face was picked.
 
 **STABILIZE**: Applies exponential moving average (EMA) smoothing to prevent jarring jumps. When uncertainty exceeds threshold, holds previous stable values rather than updating.
 
@@ -127,7 +127,7 @@ The system fulfills three of four course requirements through its technical impl
 Update: EmoNet integration for face pathway (Aug 15, 2025)
 
 - Decision: Replace the Phase 1 face model with the pretrained EmoNet face-affect estimator as the face expert. No face-model training is needed for the MVP.
-- Preprocessing: Use single-face detection (MediaPipe) to select the primary face, then apply lightweight eye-keypoint rotation using MediaPipe to level the face before resizing/normalization (no separate face-alignment library dependency).
+- Preprocessing: Use MediaPipe to find faces and optionally fall back to an OpenCV Haar cascade when coverage is low; sample up to `face_mc_samples` crops, align each via eye-keypoint rotation, then resize/normalize (no separate face-alignment dependency).
 - Uncertainty: Approximate with test-time augmentation (TTA; e.g., flip and small scale/crop jitter) and use the prediction variance with the existing uncertainty gating.
 - Calibration (optional): Train/operate in reference space [-1, 1]; apply only if it improves holdout V/A MAE (lower is better). Default off. After face-space calibration, use the FE→DEAM mapping in MATCH.
   - Note: EmoNet is frozen. Any validation split/k-fold is for the calibration layer only; if improvements are confirmed out-of-sample, refit calibration on 100% of faces-found for deployment.
@@ -163,9 +163,13 @@ Scale Conversions (for clarity)
 
 ## 3. System Architecture
 
-Face path: EmoNet (pretrained) serves as the face expert; scene path remains
-CLIP/ViT/DINO under evaluation on FindingEmo. Fusion uses inverse-variance
-weighting.
+Face path: EmoNet (pretrained) serves as the face expert. MediaPipe supplies
+the primary detections, and an OpenCV Haar cascade augments them when fewer
+than `face_mc_samples` faces are found. The runtime samples from these
+detections, aligns each crop, runs EmoNet with stochastic TTA, and aggregates
+both intra-face and inter-face uncertainty before fusion. Scene path remains
+CLIP/ViT/DINO under evaluation on FindingEmo, and fusion continues to use
+inverse-variance weighting informed by the richer variance signal.
 
 ### Scene Model
 

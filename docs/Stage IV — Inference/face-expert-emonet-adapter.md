@@ -10,13 +10,13 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
   - Load EmoNet checkpoints from `models/emonet/pretrained/` (5‑class or 8‑class model).
   - Select device (CPU/GPU), set `eval()` and `no_grad()`.
 - Preprocessing
-  - Input: an RGB/BGR face crop (from the primary face selection).
+  - Input: a BGR face crop sampled from the detection pool (MediaPipe primary detections plus optional Haar-cascade fallback—only non-overlapping faces are added, so we never fabricate crops when none exist).
   - Face alignment via MediaPipe eye keypoints (inter-ocular rotation) to approximately level faces before resizing/normalization (no separate `face-alignment` dependency).
   - Resize and apply EmoNet’s normalization exactly as in upstream demos.
 - Inference
   - Run forward pass to get continuous valence and arousal (optionally expression class if needed).
 - Uncertainty (optional, recommended)
-  - Test‑time augmentation (horizontal flip; minor crop/scale jitter) for N passes; return mean and per‑dimension variance for V and A.
+  - Test‑time augmentation (horizontal flip; minor crop/scale jitter) for N passes; return mean and per‑dimension variance for V and A. `predict(..., seed=...)` allows the runtime to control TTA randomness per sampled face (e.g., new seed for each Monte Carlo draw). `tta_seed_mode` (`"content"` or `"random"`) controls the default seeding strategy when a seed is not supplied.
 - Calibration
   - Apply learned CrossDomainCalibration layer to correct face→scene domain bias in the reference space.
   - Keep outputs in reference space `[-1, 1]`; use `EmotionScaleAligner` for any conversion to dataset/consumer scales (e.g., FindingEmo, DEAM) at boundaries.
@@ -38,6 +38,7 @@ class EmoNetAdapter:
                  n_classes: int = 8,
                  device: str = "auto",
                  tta: int = 5,
+                 tta_seed_mode: str = "content",
                  calibration_checkpoint: str | None = None):
         # Load trained CrossDomainCalibration layer
         from models.calibration import CrossDomainCalibration
@@ -46,16 +47,20 @@ class EmoNetAdapter:
             self.calibration.load_state_dict(torch.load(calibration_checkpoint))
         ...
 
-    def predict(self, face_bgr: np.ndarray) -> tuple[float, float, tuple[float, float]]:
+    def predict(self,
+                face_bgr: np.ndarray,
+                tta: int | None = None,
+                seed: int | None = None) -> tuple[float, float, tuple[float, float]]:
         """
         Returns (valence_ref, arousal_ref, (v_var, a_var)) in reference space [-1, 1].
         - Applies alignment, normalization, inference, TTA variance, and calibration (in reference space).
+        - `seed` controls deterministic vs. stochastic TTA; runtime can pass a new seed per face sample.
         """
         ...
 ```
 
 ## Integration points
-- PERCEIVE stage: after MediaPipe selects the primary face, call `adapter.predict(face_crop)`.
+- PERCEIVE stage: after the face processor surfaces candidate crops (MediaPipe + Haar fallback), call `adapter.predict(face_crop, seed=...)` for each sampled face.
 - FUSION: use returned mean and variance for inverse‑variance weighting with the scene model.
 - STABILIZE: use variance for uncertainty gating.
 - MATCH (POC): song-level retrieval with FE/DEAM conversions via `EmotionScaleAligner`;
