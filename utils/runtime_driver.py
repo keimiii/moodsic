@@ -184,14 +184,18 @@ class VideoPerceptionResult:
     var_valence: List[float]
     var_arousal: List[float]
     fps: float
+    effective_fps: float
     width: int
     height: int
     frame_count: Optional[int]
     processed_frames: int
+    sample_stride: int
     first_overlay: Optional["np.ndarray"] = None
     last_overlay: Optional["np.ndarray"] = None
     fusion_results: Optional[List[FusionResult]] = None
     overlay_path: Optional[Path] = None
+    average_valence: Optional[float] = None
+    average_arousal: Optional[float] = None
 
 
 __all__ = ["PerceiveFusionDriver", "VideoPerceptionResult"]
@@ -327,7 +331,8 @@ def perceive_video(
     face_expert: Optional[object] = None,
     scene_tta: int = 5,
     face_tta: int = 5,
-    frame_stride: int = 1,
+    frame_stride: Optional[int] = None,
+    target_sample_fps: float = 1.0,
     max_frames: Optional[int] = None,
     start_frame: int = 0,
     use_variance_weighting: bool = True,
@@ -352,16 +357,20 @@ def perceive_video(
     """Run PERCEIVE over a full video and collect fused valence/arousal series.
 
     Parameters mirror the notebook defaults while keeping the API frontend-agnostic.
+    If ``frame_stride`` is omitted, the helper samples roughly ``target_sample_fps``
+    frames per second (default ≈1 fps) based on the source video metadata.
     Set ``capture_overlays`` to False to skip overlay generation entirely, and
     ``save_overlay_to`` to export an annotated video alongside numeric results.
     """
 
-    if frame_stride < 1:
-        raise ValueError("frame_stride must be >= 1")
+    if frame_stride is not None and frame_stride < 1:
+        raise ValueError("frame_stride must be >= 1 when provided")
     if start_frame < 0:
         raise ValueError("start_frame must be >= 0")
     if max_frames is not None and max_frames <= 0:
         raise ValueError("max_frames must be positive when provided")
+    if target_sample_fps < 0:
+        raise ValueError("target_sample_fps must be >= 0")
 
     try:
         import cv2  # type: ignore
@@ -378,8 +387,19 @@ def perceive_video(
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    if fps <= 0:
-        fps = 25.0  # reasonable fallback
+    native_fps = fps if fps > 0 else 25.0
+
+    if frame_stride is not None:
+        stride = max(1, int(frame_stride))
+    else:
+        desired_fps = target_sample_fps if target_sample_fps > 0 else native_fps
+        if desired_fps >= native_fps or native_fps <= 0:
+            stride = 1
+        else:
+            stride = max(1, int(round(native_fps / desired_fps)))
+
+    effective_fps = native_fps / float(stride)
+    fps = native_fps
 
     driver = PerceiveFusionDriver(
         scene_predictor=scene_predictor,
@@ -438,7 +458,7 @@ def perceive_video(
                 idx += 1
                 continue
 
-            if ((idx - start_frame) % frame_stride) != 0:
+            if ((idx - start_frame) % stride) != 0:
                 idx += 1
                 continue
 
@@ -473,6 +493,9 @@ def perceive_video(
         if writer is not None:
             writer.release()
 
+    avg_valence = float(sum(vals) / processed) if processed else None
+    avg_arousal = float(sum(aros) / processed) if processed else None
+
     result = VideoPerceptionResult(
         video_path=src,
         frame_indices=frame_indices,
@@ -481,14 +504,18 @@ def perceive_video(
         var_valence=vvars,
         var_arousal=avars,
         fps=fps,
+        effective_fps=effective_fps,
         width=width,
         height=height,
         frame_count=frame_count if frame_count > 0 else None,
         processed_frames=processed,
+        sample_stride=stride,
         first_overlay=first_overlay if capture_overlays else None,
         last_overlay=last_overlay if capture_overlays else None,
         fusion_results=fusion_results if return_fusion else None,
         overlay_path=out_path if writer is not None else None,
+        average_valence=avg_valence,
+        average_arousal=avg_arousal,
     )
 
     return result
