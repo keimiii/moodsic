@@ -114,13 +114,15 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 
 ## 2. Course Requirements Coverage
 
-The system fulfills three of four course requirements through its technical implementation:
+The implementation satisfies all four officially defined project aspects:
 
-**Supervised Learning** is demonstrated through fine-tuning the scene model on the FindingEmo dataset (continuous valence/arousal regression). The face pathway (EmoNet) is used as a frozen expert in ablation studies and is not fine-tuned.
+**Supervised / Unsupervised Learning Scenarios** — The scene pathway is trained with labeled valence/arousal targets from FindingEmo for supervised regression, while unsupervised clustering over DEAM embeddings groups tracks into affect-aligned cohorts that drive adaptive playlist selection.
 
-**Deep Learning** forms the core of the system through transformer-based architectures including CLIP and vision transformers, which provide robust feature extraction for emotion recognition tasks.
+**Machine/Deep Learning Techniques** — The core perception stack uses transformer-based vision models (CLIP-derived encoders, vision transformers) alongside deep neural head layers for robust feature extraction and prediction.
 
-**Hybrid/Ensemble Methods** are implemented through the fusion of scene-based and face-based emotion predictions, combining complementary perspectives to improve accuracy and reduce context overfitting.
+**Hybrid / Ensemble Approach** — Scene- and face-driven affect estimators are combined through inverse-variance fusion with temporal smoothing, yielding an ensemble that balances complementary context cues.
+
+**Intelligent Sensing / Sense Making** — Real-time WebRTC ingestion, face detection, and confidence-aware smoothing provide an intelligent sensing pipeline that interprets multimodal visual signals and produces calibrated emotional state estimates for downstream music selection.
 
 ---
 
