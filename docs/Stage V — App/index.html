@@ -92,40 +92,61 @@
 
         .model-breakdown {
             background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.1rem;
         }
 
-        .model-component {
+        .signal-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 0.9rem 1rem;
             display: flex;
-            align-items: center;
-            margin: 0.5rem 0;
+            flex-direction: column;
+            gap: 0.55rem;
+            transition: opacity 0.2s ease;
+        }
+
+        .signal-card.is-muted {
+            opacity: 0.45;
+        }
+
+        .signal-title {
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.65);
+        }
+
+        .signal-line {
+            display: flex;
+            justify-content: space-between;
             font-size: 0.95rem;
         }
 
-        .model-component.ensemble {
-            margin-top: 0.75rem;
-            padding-top: 0.75rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        .signal-label {
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        .signal-value {
             font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
         }
 
-        .model-label {
+        .signal-meta,
+        .signal-status {
+            font-size: 0.8rem;
             color: rgba(255, 255, 255, 0.6);
-            margin-right: 0.5rem;
-            min-width: 100px;
+            line-height: 1.4;
         }
 
-        .model-value {
-            color: #ffffff;
-            font-size: 1.1rem;
-        }
-
-        .ensemble .model-value {
-            color: #667eea;
-            font-size: 1.2rem;
+        .signal-status {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         .video-description {
@@ -240,6 +261,92 @@
             font-weight: 600;
             color: rgba(255, 255, 255, 0.9);
             letter-spacing: 0.3px;
+        }
+
+        .cluster-overlay {
+            position: absolute;
+            bottom: 32px;
+            right: 32px;
+            width: min(320px, 42%);
+            border-radius: 16px;
+            background: rgba(20, 21, 45, 0.78);
+            border: 1px solid rgba(102, 126, 234, 0.35);
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(16px);
+            padding: 1.15rem 1.35rem;
+            color: rgba(255, 255, 255, 0.85);
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        .cluster-card {
+            margin: 0;
+        }
+
+        .cluster-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.55);
+            margin-bottom: 0.4rem;
+            display: block;
+        }
+
+        .cluster-card h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.92);
+            margin-bottom: 0.45rem;
+        }
+
+        .cluster-mood {
+            color: rgba(255, 255, 255, 0.68);
+            font-size: 0.85rem;
+            margin-bottom: 0.55rem;
+            line-height: 1.45;
+        }
+
+        .cluster-center {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+            margin-bottom: 0.55rem;
+        }
+
+        .cluster-traits {
+            list-style: none;
+            padding-left: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .cluster-traits li {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 999px;
+            padding: 0.28rem 0.7rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.85);
+            white-space: nowrap;
+        }
+
+        .cluster-placeholder {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.5;
+        }
+
+        .cluster-current {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 0.4rem;
+        }
+
+        .cluster-weights {
+            font-size: 0.78rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.2rem;
+            letter-spacing: 0.01em;
         }
 
         /* Radio station UI */
@@ -360,14 +467,14 @@
     <div class="container">
         <div class="video-panel">
             <div class="header">
-                <h1>Scene Analyzer</h1>
-                <p class="subtitle">Face + Scene Ensemble Model</p>
+                <h1>Moodsic</h1>
+                <p class="subtitle">Multimodal MoE Detection</p>
             </div>
             
             <div class="controls">
                 <button onclick="previousScene()">← Previous</button>
                 <div class="scene-indicator">
-                    Scene <span id="sceneNumber">1</span> of 5
+                    Scene <span id="sceneNumber">1</span> of <span id="sceneTotal">6</span>
                 </div>
                 <button onclick="nextScene()">Next →</button>
             </div>
@@ -386,22 +493,48 @@
                 <div class="video-info">
                     <div class="video-title" id="videoTitle">High Arousal Action</div>
                     <div class="model-breakdown">
-                        <div class="model-component">
-                            <span class="model-label">Face Model:</span>
-                            <span class="model-value" id="faceModel">😢 Crying</span>
-                        </div>
-                        <div class="model-component">
-                            <span class="model-label">Scene Model:</span>
-                            <span class="model-value" id="sceneModel">💒 Wedding</span>
-                        </div>
-                        <div class="model-component ensemble">
-                            <span class="model-label">→ Ensemble Result:</span>
-                            <span class="model-value" id="ensembleResult">😊 Tears of Joy</span>
-                        </div>
+                        <article class="signal-card" id="sceneCard">
+                            <header class="signal-title">Scene Path</header>
+                            <div class="signal-line">
+                                <span class="signal-label">Valence</span>
+                                <span class="signal-value" id="sceneValence">+0.00</span>
+                            </div>
+                            <div class="signal-line">
+                                <span class="signal-label">Arousal</span>
+                                <span class="signal-value" id="sceneArousal">+0.00</span>
+                            </div>
+                            <div class="signal-meta" id="sceneSigma">σV — · σA —</div>
+                            <div class="signal-status" id="sceneStatus">MC samples: 0</div>
+                        </article>
+                        <article class="signal-card" id="faceCard">
+                            <header class="signal-title">Face Path</header>
+                            <div class="signal-line">
+                                <span class="signal-label">Valence</span>
+                                <span class="signal-value" id="faceValence">+0.00</span>
+                            </div>
+                            <div class="signal-line">
+                                <span class="signal-label">Arousal</span>
+                                <span class="signal-value" id="faceArousal">+0.00</span>
+                            </div>
+                            <div class="signal-meta" id="faceSigma">σV — · σA —</div>
+                            <div class="signal-status" id="faceStatus">score 0.00</div>
+                        </article>
+                        <article class="signal-card" id="fusionCard">
+                            <header class="signal-title">Fusion Output</header>
+                            <div class="signal-line">
+                                <span class="signal-label">Valence</span>
+                                <span class="signal-value" id="fusionValence">+0.00</span>
+                            </div>
+                            <div class="signal-line">
+                                <span class="signal-label">Arousal</span>
+                                <span class="signal-value" id="fusionArousal">+0.00</span>
+                            </div>
+                            <div class="signal-meta" id="fusionSigma">σV — · σA —</div>
+                            <div class="signal-status" id="fusionStatus">Variance-weighted</div>
+                        </article>
                     </div>
                     <div class="video-description" id="videoDescription">
-                        Fast-paced action sequence with high energy and moderate positive valence. 
-                        Maps primarily to high arousal clusters.
+                        Select a scene to preview the fused valence–arousal state and routed cluster.
                     </div>
                 </div>
             </div>
@@ -413,6 +546,7 @@
                 <canvas id="canvas"></canvas>
                 <div class="axis-labels x-label">Valence (Negative ← → Positive)</div>
                 <div class="axis-labels y-label">Arousal (Calm ← → Excited)</div>
+                <div class="cluster-overlay" id="clusterLegend"></div>
             </div>
             <div class="radio-container">
                 <div class="radio-main">
@@ -440,64 +574,201 @@
     </div>
 
     <script>
-        // Scene definitions with their cluster mappings
+        // Scene definitions anchored to fusion-ready signals
         const scenes = [
             {
                 title: "Wedding Tears of Joy",
-                description: "Face Model: Crying (negative) | Scene Model: Wedding ceremony (positive) → Ensemble: Joy & High Arousal",
                 placeholder: "Wedding Scene",
                 color: "#ff6ba5",
-                faceEmotion: "😢 Crying",
-                sceneContext: "💒 Wedding",
-                ensembleResult: "😊 Tears of Joy",
-                // Probability of activation for each cluster (0-1)
-                clusterActivation: [0.9, 0.7, 0.1, 0.1, 0.2]
+                scenePath: {
+                    valence: 0.31,
+                    arousal: 0.28,
+                    sigmaValence: 0.19,
+                    sigmaArousal: 0.22,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: 0.43,
+                    arousal: 0.46,
+                    sigmaValence: 0.14,
+                    sigmaArousal: 0.16,
+                    score: 0.89,
+                    samples: 1,
+                    valid: true
+                },
+                fusionSignal: {
+                    valence: 0.37,
+                    arousal: 0.34,
+                    sigmaValence: 0.12,
+                    sigmaArousal: 0.14,
+                    clusterId: 0,
+                    strategy: "variance-weighted",
+                    weights: { scene: 0.44, face: 0.56 }
+                }
             },
             {
                 title: "Roller Coaster Thrill",
-                description: "Face Model: Screaming fear | Scene Model: Amusement park → Ensemble: Excitement & Thrill",
                 placeholder: "Roller Coaster",
                 color: "#ff6b6b",
-                faceEmotion: "😱 Screaming",
-                sceneContext: "🎢 Theme Park",
-                ensembleResult: "🤩 Thrilled",
-                clusterActivation: [0.8, 0.2, 0.3, 0.1, 0.3]
+                scenePath: {
+                    valence: 0.27,
+                    arousal: 0.61,
+                    sigmaValence: 0.24,
+                    sigmaArousal: 0.19,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: 0.52,
+                    arousal: 0.58,
+                    sigmaValence: 0.17,
+                    sigmaArousal: 0.15,
+                    score: 0.78,
+                    samples: 2,
+                    valid: true
+                },
+                fusionSignal: {
+                    valence: 0.41,
+                    arousal: 0.49,
+                    sigmaValence: 0.13,
+                    sigmaArousal: 0.12,
+                    clusterId: 0,
+                    strategy: "variance-weighted",
+                    weights: { scene: 0.42, face: 0.58 }
+                }
+            },
+            {
+                title: "Rainy Window Stillness",
+                placeholder: "Rainy Night",
+                color: "#5c6ac4",
+                scenePath: {
+                    valence: -0.28,
+                    arousal: -0.36,
+                    sigmaValence: 0.21,
+                    sigmaArousal: 0.18,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: -0.36,
+                    arousal: -0.49,
+                    sigmaValence: 0.19,
+                    sigmaArousal: 0.17,
+                    score: 0.82,
+                    samples: 1,
+                    valid: true
+                },
+                fusionSignal: {
+                    valence: -0.33,
+                    arousal: -0.44,
+                    sigmaValence: 0.15,
+                    sigmaArousal: 0.14,
+                    clusterId: 1,
+                    strategy: "variance-weighted",
+                    weights: { scene: 0.47, face: 0.53 }
+                }
             },
             {
                 title: "Graduation Pride",
-                description: "Face Model: Serious/Neutral | Scene Model: Graduation ceremony → Ensemble: Pride & Achievement",
                 placeholder: "Graduation",
                 color: "#4ecdc4",
-                faceEmotion: "😐 Serious",
-                sceneContext: "🎓 Graduation",
-                ensembleResult: "🥹 Proud",
-                clusterActivation: [0.7, 0.8, 0.1, 0.1, 0.3]
+                scenePath: {
+                    valence: 0.08,
+                    arousal: 0.10,
+                    sigmaValence: 0.22,
+                    sigmaArousal: 0.20,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: 0.19,
+                    arousal: 0.21,
+                    sigmaValence: 0.18,
+                    sigmaArousal: 0.17,
+                    score: 0.91,
+                    samples: 3,
+                    valid: true
+                },
+                fusionSignal: {
+                    valence: 0.14,
+                    arousal: 0.16,
+                    sigmaValence: 0.14,
+                    sigmaArousal: 0.13,
+                    clusterId: 2,
+                    strategy: "variance-weighted",
+                    weights: { scene: 0.52, face: 0.48 }
+                }
             },
             {
                 title: "Sports Intensity",
-                description: "Face Model: Angry expression | Scene Model: Basketball game → Ensemble: Competitive Focus",
                 placeholder: "Sports Game",
                 color: "#ffd93d",
-                faceEmotion: "😠 Angry",
-                sceneContext: "🏀 Competition",
-                ensembleResult: "💪 Determined",
-                clusterActivation: [0.6, 0.1, 0.7, 0.2, 0.4]
+                scenePath: {
+                    valence: -0.19,
+                    arousal: 0.03,
+                    sigmaValence: 0.20,
+                    sigmaArousal: 0.18,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: -0.27,
+                    arousal: 0.06,
+                    sigmaValence: 0.32,
+                    sigmaArousal: 0.29,
+                    score: 0.38,
+                    samples: 1,
+                    valid: false,
+                    reason: "face score below threshold"
+                },
+                fusionSignal: {
+                    valence: -0.21,
+                    arousal: 0.02,
+                    sigmaValence: 0.19,
+                    sigmaArousal: 0.17,
+                    clusterId: 3,
+                    strategy: "scene passthrough",
+                    weights: { scene: 1.0, face: 0.0 }
+                }
             },
             {
                 title: "Horror Movie Fun",
-                description: "Face Model: Fear/Surprise | Scene Model: Living room, popcorn, friends → Ensemble: Entertainment & Suspense",
                 placeholder: "Movie Night",
                 color: "#a8e6cf",
-                faceEmotion: "😨 Frightened",
-                sceneContext: "🍿 Movie Night",
-                ensembleResult: "😄 Entertained",
-                clusterActivation: [0.7, 0.3, 0.4, 0.1, 0.5]
+                scenePath: {
+                    valence: 0.03,
+                    arousal: -0.30,
+                    sigmaValence: 0.18,
+                    sigmaArousal: 0.16,
+                    samples: 5,
+                    valid: true
+                },
+                facePath: {
+                    valence: -0.04,
+                    arousal: -0.24,
+                    sigmaValence: 0.20,
+                    sigmaArousal: 0.18,
+                    score: 0.72,
+                    samples: 4,
+                    valid: true
+                },
+                fusionSignal: {
+                    valence: 0.01,
+                    arousal: -0.26,
+                    sigmaValence: 0.15,
+                    sigmaArousal: 0.14,
+                    clusterId: 4,
+                    strategy: "variance-weighted",
+                    weights: { scene: 0.48, face: 0.52 }
+                }
             }
         ];
 
         const sceneSongs = [
             { title: 'Sunlit Avenues', artist: 'Ivory Coast', durationSec: 200 },
             { title: 'Gravity Rush', artist: 'Midnight Circuit', durationSec: 178 },
+            { title: 'Midnight Drizzle', artist: 'Slow Parade', durationSec: 208 },
             { title: 'Caps & Gowns', artist: 'Riverfolk', durationSec: 191 },
             { title: 'Full Court Press', artist: 'Baseline', durationSec: 167 },
             { title: 'Couch Screams', artist: 'Neon Noir', durationSec: 182 }
@@ -508,6 +779,7 @@
         let clusters = [];
         let animationFrame;
         let particles = [];
+        let activeClusterId = null;
 
         // Radio player state
         let songTimer = null;
@@ -557,6 +829,117 @@
             }
         }
 
+        function setElementText(id, text) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = text;
+            }
+        }
+
+        function formatSigned(value) {
+            if (value === null || value === undefined || Number.isNaN(value)) {
+                return '—';
+            }
+            const clamped = Math.max(-1, Math.min(1, value));
+            const rounded = Math.round(clamped * 100) / 100;
+            return `${rounded >= 0 ? '+' : ''}${rounded.toFixed(2)}`;
+        }
+
+        function formatSigmaValue(value) {
+            if (value === null || value === undefined || Number.isNaN(value)) {
+                return '—';
+            }
+            return value.toFixed(2);
+        }
+
+        function formatSigmaPair(sigV, sigA) {
+            return `σV ${formatSigmaValue(sigV)} · σA ${formatSigmaValue(sigA)}`;
+        }
+
+        function formatScore(score) {
+            if (score === null || score === undefined || Number.isNaN(score)) {
+                return '—';
+            }
+            return score.toFixed(2);
+        }
+
+        function formatWeight(weight) {
+            if (weight === null || weight === undefined || Number.isNaN(weight)) {
+                return '—';
+            }
+            return weight.toFixed(2);
+        }
+
+        function joinStatus(parts) {
+            return parts.filter(Boolean).join(' | ') || '—';
+        }
+
+        function updateSceneCard(signal) {
+            if (!signal) {
+                return;
+            }
+            const card = document.getElementById('sceneCard');
+            if (card) {
+                card.classList.toggle('is-muted', signal.valid === false);
+            }
+            setElementText('sceneValence', formatSigned(signal.valence));
+            setElementText('sceneArousal', formatSigned(signal.arousal));
+            setElementText('sceneSigma', formatSigmaPair(signal.sigmaValence, signal.sigmaArousal));
+
+            const statusParts = [];
+            if (signal.samples) {
+                statusParts.push(`MC samples ${signal.samples}`);
+            }
+            if (signal.valid === false) {
+                statusParts.push('gated');
+            }
+            setElementText('sceneStatus', joinStatus(statusParts));
+        }
+
+        function updateFaceCard(signal) {
+            if (!signal) {
+                return;
+            }
+            const card = document.getElementById('faceCard');
+            const isActive = signal.valid !== false;
+            if (card) {
+                card.classList.toggle('is-muted', !isActive);
+            }
+            setElementText('faceValence', formatSigned(signal.valence));
+            setElementText('faceArousal', formatSigned(signal.arousal));
+            setElementText('faceSigma', formatSigmaPair(signal.sigmaValence, signal.sigmaArousal));
+
+            const statusParts = [];
+            if (typeof signal.score === 'number') {
+                statusParts.push(`score ${formatScore(signal.score)}`);
+            }
+            if (signal.samples) {
+                statusParts.push(`faces ${signal.samples}`);
+            }
+            if (!isActive) {
+                statusParts.push(signal.reason ? `gated (${signal.reason})` : 'gated');
+            }
+            setElementText('faceStatus', joinStatus(statusParts));
+        }
+
+        function updateFusionCard(signal) {
+            if (!signal) {
+                return;
+            }
+            setElementText('fusionValence', formatSigned(signal.valence));
+            setElementText('fusionArousal', formatSigned(signal.arousal));
+            setElementText('fusionSigma', formatSigmaPair(signal.sigmaValence, signal.sigmaArousal));
+
+            const parts = [];
+            if (signal.strategy) {
+                parts.push(signal.strategy);
+            }
+            if (signal.weights) {
+                parts.push(`scene ${formatWeight(signal.weights.scene)} · face ${formatWeight(signal.weights.face)}`);
+            }
+            setElementText('fusionStatus', joinStatus(parts));
+        }
+
         // Initialize canvas and generate clusters
         function init() {
             canvas = document.getElementById('canvas');
@@ -564,6 +947,11 @@
             
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
+
+            const totalIndicator = document.getElementById('sceneTotal');
+            if (totalIndicator) {
+                totalIndicator.textContent = scenes.length;
+            }
             
             generateClusters();
             updateScene();
@@ -576,17 +964,103 @@
             canvas.height = container.clientHeight - 48;
         }
 
-        // Generate 5 noisy clusters in valence-arousal space
+        function renderClusterLegend(selectedClusterId, fusedSignal) {
+            const legend = document.getElementById('clusterLegend');
+            if (!legend) {
+                return;
+            }
+
+            const activeCluster = clusters.find(cluster => cluster.id === selectedClusterId);
+
+            if (!activeCluster) {
+                legend.innerHTML = '<div class="cluster-placeholder">Fusion output will appear here once a scene plays through.</div>';
+                return;
+            }
+
+            const centerValence = activeCluster.center ? activeCluster.center.valence : 0;
+            const centerArousal = activeCluster.center ? activeCluster.center.arousal : 0;
+            const centerLine = `Center V~${centerValence.toFixed(2)} | A~${centerArousal.toFixed(2)}`;
+            const traitItems = (activeCluster.traits || []).map(trait => `<li>${trait}</li>`).join('');
+
+            const fusionLine = fusedSignal
+                ? `<p class="cluster-current">Fusion V ${formatSigned(fusedSignal.valence)} · A ${formatSigned(fusedSignal.arousal)}</p>`
+                : '';
+
+            const sigmaLine = fusedSignal
+                ? `<p class="cluster-current">${formatSigmaPair(fusedSignal.sigmaValence, fusedSignal.sigmaArousal)}</p>`
+                : '';
+
+            const weightLine = fusedSignal && fusedSignal.weights
+                ? `<p class="cluster-weights">scene ${formatWeight(fusedSignal.weights.scene)} · face ${formatWeight(fusedSignal.weights.face)}</p>`
+                : '';
+
+            legend.innerHTML = `
+                <article class="cluster-card">
+                    <span class="cluster-label">Cluster ${activeCluster.id}</span>
+                    <h3>${activeCluster.name}</h3>
+                    <p class="cluster-mood">${activeCluster.mood}</p>
+                    <p class="cluster-center">${centerLine}</p>
+                    ${fusionLine}
+                    ${sigmaLine}
+                    ${weightLine}
+                    <ul class="cluster-traits">${traitItems}</ul>
+                </article>
+            `;
+        }
+
+        // Generate 5 noisy clusters in valence-arousal space using GMM centroids
         function generateClusters() {
             const clusterConfigs = [
-                { cx: 0.7, cy: 0.7, label: "Exciting & Positive" },  // High arousal, positive valence
-                { cx: 0.7, cy: 0.3, label: "Calm & Positive" },      // Low arousal, positive valence
-                { cx: 0.3, cy: 0.7, label: "Exciting & Negative" },  // High arousal, negative valence
-                { cx: 0.3, cy: 0.3, label: "Calm & Negative" },      // Low arousal, negative valence
-                { cx: 0.5, cy: 0.5, label: "Neutral" }               // Center cluster
+                {
+                    clusterId: 0,
+                    valence: 0.37,
+                    arousal: 0.33,
+                    label: "High Valence - High Arousal",
+                    name: "Cluster 0 - High Valence, High Arousal",
+                    mood: "Party-starting joy, confetti energy.",
+                    traits: ["fast tempo", "big drops", "bright majors", "loud and punchy"]
+                },
+                {
+                    clusterId: 1,
+                    valence: -0.31,
+                    arousal: -0.43,
+                    label: "Low Valence - Low Arousal",
+                    name: "Cluster 1 - Low Valence, Low Arousal",
+                    mood: "Rainy-window melancholy and gentle sighs.",
+                    traits: ["slow tempo", "minor keys", "sparse textures", "soft dynamics"]
+                },
+                {
+                    clusterId: 2,
+                    valence: 0.11,
+                    arousal: 0.14,
+                    label: "Moderately High Valence - Moderate Arousal",
+                    name: "Cluster 2 - Moderately High Valence, Moderate Arousal",
+                    mood: "Feel-good groove, smiles without the sweat.",
+                    traits: ["steady beat", "warm chords", "catchy hooks", "relaxed lift"]
+                },
+                {
+                    clusterId: 3,
+                    valence: -0.20,
+                    arousal: -0.01,
+                    label: "Slightly Negative Valence - Neutral Arousal",
+                    name: "Cluster 3 - Slightly Negative Valence, Neutral Arousal",
+                    mood: "Moody focus with a thoughtful edge.",
+                    traits: ["modal or minor", "mid tempo", "restrained energy", "atmospheric layers"]
+                },
+                {
+                    clusterId: 4,
+                    valence: 0.01,
+                    arousal: -0.24,
+                    label: "Slightly Positive Valence - Low Arousal",
+                    name: "Cluster 4 - Slightly Positive Valence, Low Arousal",
+                    mood: "Sunny chill and hammock vibes.",
+                    traits: ["slow-mid tempo", "soft drums", "warm harmonies", "relaxed feel"]
+                }
             ];
             
-            clusters = clusterConfigs.map((config, i) => {
+            clusters = clusterConfigs.map((config, index) => {
+                const cx = (config.valence + 1) / 2;
+                const cy = (config.arousal + 1) / 2;
                 const points = [];
                 const numPoints = 80 + Math.random() * 40; // 80-120 points per cluster
                 
@@ -595,8 +1069,8 @@
                     const angle = Math.random() * Math.PI * 2;
                     const radius = gaussianRandom() * 0.12; // Cluster spread
                     
-                    const x = config.cx + Math.cos(angle) * radius;
-                    const y = config.cy + Math.sin(angle) * radius;
+                    const x = cx + Math.cos(angle) * radius;
+                    const y = cy + Math.sin(angle) * radius;
                     
                     // Add some noise for realism
                     const noise = 0.02;
@@ -614,13 +1088,19 @@
                 }
                 
                 return {
-                    id: i,
+                    id: config.clusterId ?? index,
                     label: config.label,
+                    name: config.name,
+                    mood: config.mood,
+                    traits: config.traits,
                     points: points,
-                    centerX: config.cx,
-                    centerY: config.cy
+                    centerX: cx,
+                    centerY: cy,
+                    center: { valence: config.valence, arousal: config.arousal }
                 };
             });
+
+            renderClusterLegend(activeClusterId, null);
         }
 
         // Gaussian random number generator
@@ -637,29 +1117,60 @@
             // Update UI
             document.getElementById('videoText').textContent = scene.placeholder;
             document.getElementById('videoTitle').textContent = scene.title;
-            document.getElementById('videoDescription').textContent = scene.description;
             document.getElementById('sceneNumber').textContent = currentSceneIndex + 1;
             document.getElementById('videoPlaceholder').style.background = 
                 `linear-gradient(135deg, ${scene.color} 0%, #764ba2 100%)`;
             
-            // Update model breakdown
-            document.getElementById('faceModel').textContent = scene.faceEmotion;
-            document.getElementById('sceneModel').textContent = scene.sceneContext;
-            document.getElementById('ensembleResult').textContent = scene.ensembleResult;
+            updateSceneCard(scene.scenePath);
+            updateFaceCard(scene.facePath);
+            updateFusionCard(scene.fusionSignal);
             
             // Update cluster activations
-            clusters.forEach((cluster, i) => {
-                const activation = scene.clusterActivation[i];
+            activeClusterId = scene.fusionSignal && typeof scene.fusionSignal.clusterId === 'number'
+                ? scene.fusionSignal.clusterId
+                : (clusters.length ? clusters[0].id : null);
+
+            clusters.forEach(cluster => {
+                const isActive = cluster.id === activeClusterId;
+                const activationBase = isActive ? 0.95 : 0.02;
+                const variance = isActive ? 0.08 : 0.01;
+
                 cluster.points.forEach(point => {
-                    // Add some randomness to individual point activation
-                    const variance = 0.3;
-                    const pointActivation = Math.max(0, Math.min(1, 
-                        activation + (Math.random() - 0.5) * variance
+                    // Add some randomness to individual point activation to keep the cluster alive
+                    const pointActivation = Math.max(0, Math.min(1,
+                        activationBase + (Math.random() - 0.5) * variance
                     ));
                     point.targetActivation = pointActivation;
                 });
             });
-            
+
+            renderClusterLegend(activeClusterId, scene.fusionSignal);
+
+            const cluster = clusters.find(c => c.id === activeClusterId);
+            const faceScoreText = scene.facePath && typeof scene.facePath.score === 'number'
+                ? `score ${formatScore(scene.facePath.score)}`
+                : null;
+
+            const faceLine = scene.facePath
+                ? (scene.facePath.valid === false
+                    ? `Face path gated (${scene.facePath.reason || 'guardrails'}${faceScoreText ? `, ${faceScoreText}` : ''}).`
+                    : `Face path contributing (${faceScoreText || 'score —'}).`)
+                : '';
+
+            const fusionStrategy = scene.fusionSignal && scene.fusionSignal.strategy
+                ? `Fusion strategy: ${scene.fusionSignal.strategy}.`
+                : '';
+
+            const clusterLine = cluster
+                ? `Fusion locks to ${cluster.name}.`
+                : '';
+
+            const narrative = scene.narrative || '';
+            const descriptionText = [narrative, clusterLine, fusionStrategy, faceLine]
+                .filter(Boolean)
+                .join(' ');
+            document.getElementById('videoDescription').textContent = descriptionText;
+
             // Update radio station song for this scene
             startSong();
         }
@@ -720,7 +1231,8 @@
                     }
                     
                     // Draw point
-                    ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + glowIntensity * 0.6})`;
+                    const baseOpacity = 0.1 + glowIntensity * 0.7;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${baseOpacity})`;
                     ctx.beginPath();
                     ctx.arc(x, y, size, 0, Math.PI * 2);
                     ctx.fill();
