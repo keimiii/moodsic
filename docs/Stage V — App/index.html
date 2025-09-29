@@ -196,6 +196,8 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            gap: 1rem;
+            min-height: 0;
         }
 
         .viz-container {
@@ -204,7 +206,9 @@
             padding: 1.5rem;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            flex: 1;
+            flex: 0 0 58vh;
+            max-height: 58vh;
+            min-height: 360px;
             position: relative;
         }
 
@@ -212,6 +216,7 @@
             width: 100%;
             height: 100%;
             border-radius: 12px;
+            display: block;
         }
 
         .axis-labels {
@@ -351,7 +356,7 @@
 
         /* Radio station UI */
         .radio-container {
-            margin-top: 1rem;
+            margin-top: 0;
             background: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
