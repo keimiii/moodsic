@@ -169,18 +169,80 @@ Face path: EmoNet (pretrained) serves as the face expert. MediaPipe supplies
 the primary detections, and an OpenCV Haar cascade augments them when fewer
 than `face_mc_samples` faces are found. The runtime samples from these
 detections, aligns each crop, runs EmoNet with stochastic TTA, and aggregates
-both intra-face and inter-face uncertainty before fusion. Scene path remains
-CLIP/ViT/DINO under evaluation on FindingEmo, and fusion continues to use
-inverse-variance weighting informed by the richer variance signal.
+both intra-face and inter-face uncertainty before fusion. The scene path now
+standardizes on the CLIP ViT-B/32 adapter trained in
+`notebooks/scene/CLIP_ViT-B32_improved.ipynb`, exported as
+`models/scene/best_model.pkl`. Earlier DINO/ResNet experiments remain available
+for reference, and fusion continues to use inverse-variance weighting informed
+by the richer variance signal.
 
 ### Scene Model
 
-- Status: Final backbone selection is in progress. Candidates include
-  DINOv3 ViT-B/16, CLIP-ViT, and EfficientNet. The CLIP-based code snippet
-  below remains illustrative for the baseline; current experiments prioritize
-  DINOv3 with a small regression head trained on top of a frozen backbone.
+- Status: CLIP ViT-B/32 with a lightweight dropout head ("CLIP_ViT-B32_improved")
+  is the production scene backbone. Ablations across eight candidates (see
+  `docs/scene_model_ablation.md`) showed this configuration delivering the best
+  FindingEmo performance once all scores were reported in the common [-1, 1]
+  space using `fe_to_ref` scaling. The exported checkpoint lives at
+  `models/scene/best_model.pkl` and is loaded automatically by
+  `SceneCLIPAdapter`.
+- Performance snapshot (FindingEmo, reference [-1, 1]):
+  - Valence MAE: 0.3561
+  - Arousal MAE: 0.4264
+  - Average MAE: 0.3913
+  - Spearman (valence / arousal / avg): 0.6643 / 0.3247 / 0.4945
+  These metrics come from the held-out split in
+  `docs/scene_model_ablation.md` (CLIP_ViT-B32_improved column) and outperform
+  the strongest DINOv3 baseline (`dinov3_mlp`) by roughly 6% absolute MAE
+  (0.4163 → 0.3913).
+- When CLIP resources are unavailable (e.g., offline experimentation), the
+  earlier backbones can still be instantiated manually; their configurations and
+  metrics remain catalogued in the ablation sheet.
 
-#### DINOv3 ViT-B/16 (current experiment)
+#### Why CLIP ViT-B/32 surpassed DINOv3
+
+- **Emotion-aware pretraining signal** — CLIP’s vision encoder is distilled from
+  image–text pairs that emphasize human-centric semantics, so its frozen
+  features already correlate with affective cues. Fine-tuning those features on
+  the modest FindingEmo split (≈13k training images;
+  `docs/scene_model_ablation.md:7`) yields the lowest MAE and highest rank
+  metrics in the ablation (`docs/scene_model_ablation.md:22-25`).
+  DINOv3 relies on self-supervised invariances without any textual grounding, so
+  the regression head must learn the emotion mapping almost from scratch — a
+  tougher fit for the limited dataset.
+- **Regularised multitask head** — The improved CLIP run adds dropout-heavy
+  regression heads plus an auxiliary pseudo-emo8 classification loss
+  (`docs/scene_model_ablation.md:16-17`), which stabilises optimisation and
+  reduces overfitting. The DINO variants use plain MSE on valence/arousal, so
+  they lack that extra supervision signal. The result is a ≈0.025 improvement in
+  average MAE after scaling to [-1, 1] (0.3913 vs. 0.4163).
+- **Augmentation + resolution alignment** — CLIP maintains its native
+  224×224 crop pipeline with colour jitter, perspective, and Gaussian blur
+  (`docs/scene_model_ablation.md:12`), closely matching the model’s pretraining
+  distribution. The DINO notebooks resize frames to 800×608 with a “squish”
+  transform, leading to aspect warping and less aggressive colour augmentation.
+  That gap likely explains why DINO’s Spearman scores plateau around 0.43 while
+  CLIP reaches 0.49 (`docs/scene_model_ablation.md:23`).
+
+#### Future scene-model enhancements (time-permitting)
+
+- **Lightweight adapter fine-tuning for DINOv3/CLIP** — Experiment with
+  parameter-efficient modules (LoRA or bottleneck adapters) on top of the frozen
+  backbones. This keeps compute modest while giving the model capacity to learn
+  emotion-specific shifts; it may narrow the 0.025 MAE gap highlighted in the
+  ablation (`docs/scene_model_ablation.md:25`).
+- **Curriculum with VEATIC pseudo-labels** — Use the richer VEATIC video set for
+  semi-supervised fine-tuning by distilling high-confidence CLIP predictions
+  into additional training pairs. This would expand coverage beyond the ≈13k
+  labelled FindingEmo frames (`docs/scene_model_ablation.md:7`) and expose the
+  model to dynamic lighting and occlusion scenarios documented in VEATIC
+  (`docs/project_overview.md:88-113`).
+- **Temporal-aware scene encoder** — Extend the pipeline with a lightweight
+  temporal transformer or 3D CNN fed by the existing CLIP embeddings. Even a
+  frame-level EMA is crude compared to modelling motion directly; incorporating
+  temporal context could stabilise arousal predictions before they reach the
+  fusion stage (`docs/project_overview.md:208-214`).
+
+#### Historical: DINOv3 ViT-B/16 baseline
 
 - Backbone: `facebook/dinov3-vitb16-pretrain-lvd1689m` (frozen backbone) with a
   lightweight regression head trained on FindingEmo.
@@ -195,7 +257,7 @@ inverse-variance weighting informed by the richer variance signal.
 - Scale handling:
   - Labels are converted from FindingEmo to the reference space [-1, 1] for training and evaluation. Internal normalization (e.g., unit [0,1]) may be used for stability, but all reported metrics are computed in reference space [-1, 1].
   - Reference space [-1, 1] remains the cross-model alignment for EmoNet/Scene/DEAM (unchanged policy).
-- Loss and metrics (current run):
+- Loss and metrics (historical run):
   - Loss: MSE (internal normalization if used).
   - Test metrics (reference space [-1, 1] unless stated):
     - `test_loss` (criterion in [0,1]): 0.0802606568
