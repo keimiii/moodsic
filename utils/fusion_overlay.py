@@ -33,8 +33,30 @@ def draw_fusion_overlay(img: np.ndarray, result: FusionResult) -> np.ndarray:
     out = img.copy()
     overlay = img.copy()
 
-    # Draw face bbox if present
-    if getattr(result, "face_bbox", None):
+    # Draw sampled face bboxes if present
+    face_samples = getattr(result, "face_samples", None)
+    if face_samples:
+        for idx, sample in enumerate(face_samples):
+            try:
+                x, y, bw, bh = sample.bbox
+            except Exception:
+                continue
+            color = (0, 255, 0) if idx == 0 else (0, 255, 255)
+            thickness = 2 if idx == 0 else 1
+            cv2.rectangle(overlay, (x, y), (x + bw, y + bh), color, thickness)
+            if idx < 3:  # avoid clutter
+                label = f"#{idx+1}"
+                cv2.putText(
+                    overlay,
+                    label,
+                    (max(0, x), max(15, y - 4)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    color,
+                    1,
+                    cv2.LINE_AA,
+                )
+    elif getattr(result, "face_bbox", None):
         x, y, bw, bh = result.face_bbox
         cv2.rectangle(overlay, (x, y), (x + bw, y + bh), (0, 255, 0), 2)
 

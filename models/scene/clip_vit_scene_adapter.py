@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import math
+from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
@@ -44,6 +46,8 @@ class SceneCLIPAdapter:
         dropout_rate: float = 0.3,
         device: str = "auto",
         tta: int = 5,
+        weights_path: Optional[str] = None,
+        auto_load_best: bool = True,
     ) -> None:
         if torch is None or nn is None or CLIPModel is None or CLIPImageProcessor is None:
             raise ImportError(
@@ -78,6 +82,12 @@ class SceneCLIPAdapter:
         # Freeze CLIP parameters
         for p in self.backbone.parameters():
             p.requires_grad = False
+
+        # Optionally load trained weights (heads and/or backbone) from checkpoint
+        if auto_load_best:
+            default_path = Path(__file__).resolve().parent / "best_model.pkl"
+            ckpt = Path(weights_path) if weights_path else default_path
+            self._maybe_load_weights(ckpt)
 
     # ---- Public API -----------------------------------------------------
     def predict(
@@ -189,6 +199,86 @@ class SceneCLIPAdapter:
         except Exception:
             return torch.device("cpu")
 
+    # ---- Weights loading -------------------------------------------------
+    def _maybe_load_weights(self, ckpt_path: Path) -> None:
+        """
+        Best-effort loader for trained scene adapter weights.
+
+        Supports either a flat state_dict or a dict with a nested 'state_dict'.
+        Loads any of the following submodules if present: 'valence_head.',
+        'arousal_head.', and 'backbone.' (strict=False for safety).
+        """
+        try:
+            if ckpt_path is None or not ckpt_path.exists():
+                # As a fallback, try a sibling .pth with the same stem
+                alt = ckpt_path.with_suffix(".pth")
+                if not alt.exists():
+                    return
+                ckpt_path = alt
+
+            state = None
+            try:
+                # torch.load can read pickled dicts regardless of extension
+                state = torch.load(ckpt_path, map_location="cpu")  # type: ignore
+            except Exception as e:
+                logging.getLogger(__name__).warning(
+                    "SceneCLIPAdapter: failed torch.load on %s: %s", ckpt_path, e
+                )
+                state = None
+
+            if state is None:
+                return
+
+            # If nested under common keys, unwrap
+            if isinstance(state, dict):
+                for key in ("state_dict", "model_state_dict", "weights"):
+                    if key in state and isinstance(state[key], dict):
+                        state = state[key]
+                        break
+
+            if not isinstance(state, dict):
+                return
+
+            # Helper to load a submodule by prefix
+            def load_prefixed(module: nn.Module, prefix: str) -> bool:
+                sub = {k[len(prefix) :]: v for k, v in state.items() if k.startswith(prefix)}
+                if not sub:
+                    return False
+                missing, unexpected = module.load_state_dict(sub, strict=False)  # type: ignore
+                if missing or unexpected:
+                    logging.getLogger(__name__).debug(
+                        "SceneCLIPAdapter: partial load for %s (missing=%s unexpected=%s)",
+                        prefix,
+                        missing,
+                        unexpected,
+                    )
+                return True
+
+            any_loaded = False
+            any_loaded |= load_prefixed(self.valence_head, "valence_head.")
+            any_loaded |= load_prefixed(self.arousal_head, "arousal_head.")
+            # Backbone is large; load only if explicitly present
+            any_loaded |= load_prefixed(self.backbone, "backbone.")
+
+            if not any_loaded:
+                # Try direct load if ckpt was saved from only heads (no prefixes)
+                try:
+                    self.valence_head.load_state_dict(state, strict=False)  # type: ignore
+                    self.arousal_head.load_state_dict(state, strict=False)  # type: ignore
+                    any_loaded = True
+                except Exception:
+                    pass
+
+            if any_loaded:
+                logging.getLogger(__name__).info(
+                    "SceneCLIPAdapter: loaded weights from %s", ckpt_path
+                )
+        except Exception as e:  # pragma: no cover - robustness
+            logging.getLogger(__name__).warning(
+                "SceneCLIPAdapter: error loading weights from %s: %s",
+                ckpt_path,
+                e,
+            )
+
 
 __all__ = ["SceneCLIPAdapter"]
-

@@ -62,9 +62,9 @@ Current status (code):
 
 - PERCEIVE
   - Scene model: CLIP/ViT backbone, regression heads with dropout; MC Dropout for mean/variance.
-  - Face path: single-face detection (MediaPipe), face alignment, and EmoNet inference via an adapter that handles preprocessing, calibration (EmoNet→FindingEmo), and optional TTA-based uncertainty.
-  - Fusion: variance-weighted averaging when both paths available; fall back to scene-only when no face.
-  - Defaults: `scene_mc_samples=5`, `face_tta=5`; outputs in reference space `[-1, 1]`.
+  - Face path: MediaPipe drives detection; when fewer than `face_mc_samples` faces are found, an OpenCV Haar cascade fallback proposes additional candidates. Only genuinely new, non-overlapping faces are added—the fallback does not fabricate extra crops when none exist. We sample up to `face_mc_samples` crops (score-weighted), align them, and run EmoNet with stochastic TTA seeding so the returned variance captures both crop-level noise and inter-face disagreement.
+  - Fusion: variance-weighted averaging when both paths available; fall back to scene-only when no face candidates remain. Per-face samples are stored for overlays/debugging.
+  - Defaults: `scene_mc_samples=5`, `face_mc_samples=5`, `face_sampling="weighted"`, `face_tta=5`; outputs in reference space `[-1, 1]`.
 
 - STABILIZE
   - Exponential Moving Average (EMA) over valence/arousal.

@@ -1,6 +1,6 @@
 # Testing Guide
 
-This project includes a small pytest suite for the fusion math and overlay utilities.
+This project includes a small pytest suite for the fusion math, overlay utilities, and a PERCEIVE-stage end-to-end smoke test using real adapters.
 
 ## Quick Start
 
@@ -32,6 +32,12 @@ pytest -q tests/test_fusion.py
 pytest -q tests/test_fusion_overlay.py
 ```
 
+- PERCEIVE (real adapters, real images):
+
+```bash
+pytest -q tests/test_perceive_e2e_flow.py
+```
+
 - Single test function:
 
 ```bash
@@ -48,6 +54,9 @@ pytest -q -k "variance or overlay"
 
 - `tests/test_fusion.py` — unit and integration tests for `SceneFaceFusion`.
 - `tests/test_fusion_overlay.py` — overlay drawing checks.
+- `tests/test_perceive_e2e_flow.py` — PERCEIVE smoke test using real models
+  (SceneCLIPAdapter + EmoNetAdapter) and real images. Skips gracefully when
+  prerequisites (transformers cache, mediapipe, image files) are unavailable.
 
 ## Coverage Overview (What tests aim to prove)
 
@@ -82,3 +91,7 @@ If the file is missing, the test auto-skips. Place the dataset under `data/` to 
 - Import errors: ensure you run `pytest` from the repository root so relative imports resolve.
 - OpenCV missing: `uv pip install opencv-python-headless`.
 - Non-fish shells: adapt the venv activation command for your shell, but this repo standardizes on fish (`source .venv/bin/activate.fish`).
+- CLIP weights not found/offline: the PERCEIVE test will skip if it cannot
+  instantiate the CLIP model (requires access to a local HF cache or network).
+- EmoNet weights missing: the face adapter runs with random init; results are
+  not meaningful but the test only validates output ranges.
