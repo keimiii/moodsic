@@ -1,6 +1,6 @@
 # Stage IV — EmoNet Face Expert: Missing Tasks Plan
 
-This document lists all remaining implementation tasks for the EmoNet face-expert adapter and related runtime pieces. For each task, it states what needs to be done, why it matters, and how to implement it.
+This document originated as the task tracker for the EmoNet face-expert adapter work. The core items below are **complete** (see references), so treat this file as a historical checklist and quick refresher on what was built rather than an active TODO list.
 
 References:
 - docs/Stage IV — Inference/face-expert-emonet-adapter.md
@@ -200,9 +200,15 @@ Acceptance criteria:
 
 ## Quick Implementation Checklist
 
- - [x] EmoNetSingleFaceProcessor (MediaPipe) in utils/
- - [x] Face alignment via MediaPipe eye-keypoints (no extra helper by default)
- - [x] EmoNetAdapter with calibration + scale alignment
- - [x] TTA (flip + crop/scale jitter) and variance aggregation
- - [x] Fusion module and runtime integration
- - [x] Update dependencies; confirm environment notes
+- [x] EmoNetSingleFaceProcessor (MediaPipe) in utils/
+- [x] Face alignment via MediaPipe eye-keypoints (no extra helper by default)
+- [x] EmoNetAdapter with calibration + scale alignment
+- [x] TTA (flip + crop/scale jitter) and variance aggregation
+- [x] Fusion module and runtime integration
+- [x] Update dependencies; confirm environment notes
+
+Implemented code:
+- `utils/emonet_single_face_processor.py`
+- `models/face/emonet_adapter.py`
+- `models/fusion.py`
+- Tests: `tests/test_fusion.py`, `tests/test_song_matcher.py`

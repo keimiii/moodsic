@@ -38,6 +38,8 @@ v_fe, a_fe = aligner.emonet_to_findingemo(emonet_valence, emonet_arousal)
 v_deam, a_deam = aligner.emonet_to_deam_static(emonet_valence, emonet_arousal)
 ```
 
-- No manual calibration needed - the aligner handles scale alignment
+- No manual scale math is needed in callers—the aligner handles conversions while
+  optional domain-calibration layers (e.g., `CrossDomainCalibration` in
+  `models/face/emonet_adapter.py`) correct systematic bias when requested.
 - All conversions maintain numerical precision and handle edge cases
 - Strict mode available for validation during development

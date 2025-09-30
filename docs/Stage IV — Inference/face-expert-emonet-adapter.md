@@ -1,6 +1,6 @@
 # Face Expert: EmoNet Adapter
 
-Status: design and integration guide for the face pathway
+Status: design and integration guide for the face pathway (implemented in `models/face/emonet_adapter.py`)
 
 ## Purpose
 A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime pipeline. It hides model loading, preprocessing, calibration, and uncertainty so PERCEIVE/FUSION can use a simple, stable API.
@@ -18,7 +18,7 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
 - Uncertainty (optional, recommended)
   - Test‑time augmentation (horizontal flip; minor crop/scale jitter) for N passes; return mean and per‑dimension variance for V and A. `predict(..., seed=...)` allows the runtime to control TTA randomness per sampled face (e.g., new seed for each Monte Carlo draw). `tta_seed_mode` (`"content"` or `"random"`) controls the default seeding strategy when a seed is not supplied.
 - Calibration
-  - Apply learned CrossDomainCalibration layer to correct face→scene domain bias in the reference space.
+  - Apply learned CrossDomainCalibration layer (when provided) to correct face→scene domain bias in the reference space.
   - Keep outputs in reference space `[-1, 1]`; use `EmotionScaleAligner` for any conversion to dataset/consumer scales (e.g., FindingEmo, DEAM) at boundaries.
 - Output contract
   - `(valence: float, arousal: float, variance: tuple[float, float])` in reference space `[-1, 1]`
@@ -27,8 +27,8 @@ A small adapter that exposes EmoNet as a drop‑in "face expert" to the runtime 
 - Vendored upstream code and weights (unmodified):
   - `models/emonet/` (see [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md))
 - Adapter (our code):
-  - Suggested: `models/emonet_adapter.py` (or `models/face/emonet_adapter.py`)
-  - Loads vendored package from `models/emonet/` and weights from `models/emonet/pretrained/`
+  - Location: `models/face/emonet_adapter.py`
+  - Loads the vendored package from `models/emonet/` and weights from `models/emonet/pretrained/`
 
 ## Minimal interface
 ```python
@@ -40,11 +40,12 @@ class EmoNetAdapter:
                  tta: int = 5,
                  tta_seed_mode: str = "content",
                  calibration_checkpoint: str | None = None):
-        # Load trained CrossDomainCalibration layer
-        from models.calibration import CrossDomainCalibration
-        self.calibration = CrossDomainCalibration() if calibration_checkpoint else None
+        # Optional CrossDomainCalibration layer (gracefully falls back when unavailable)
+        self.calibration = None
         if calibration_checkpoint:
-            self.calibration.load_state_dict(torch.load(calibration_checkpoint))
+            from models.calibration import CrossDomainCalibration
+            self.calibration = CrossDomainCalibration()
+            self.calibration.load_state_dict(torch.load(calibration_checkpoint, map_location="cpu"))
         ...
 
     def predict(self,

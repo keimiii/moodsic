@@ -18,6 +18,22 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 ## Reference implementation
 
 ```python
+import time
+from collections import deque
+from dataclasses import dataclass
+from typing import Optional, Sequence
+
+import numpy as np
+import pandas as pd
+
+
+@dataclass
+class MatchResult:
+    song: Optional[pd.Series]
+    switch: bool
+    timestamp: float
+
+
 class SongMatcher:
     def __init__(
         self,
@@ -47,7 +63,14 @@ class SongMatcher:
             return order[:2]
         return order[:1]
 
-    def recommend(self, v_ref: float, a_ref: float, *, now: Optional[float] = None) -> MatchResult:
+    def recommend(
+        self,
+        v_ref: float,
+        a_ref: float,
+        *,
+        now: Optional[float] = None,
+        top_k: int = 20,
+    ) -> MatchResult:
         timestamp = now if now is not None else time.time()
         if self._current is not None and self._current_start is not None:
             if (timestamp - self._current_start) < self.min_dwell:
@@ -60,6 +83,11 @@ class SongMatcher:
             - np.array([v_ref, a_ref], dtype=float),
             axis=1,
         )
+
+        if top_k and candidates.shape[0] > top_k:
+            keep = np.argpartition(distances, top_k - 1)[:top_k]
+            candidates = candidates.iloc[keep]
+            distances = distances[keep]
 
         mask = ~candidates["song_id"].isin(self._recent)
         if mask.any():

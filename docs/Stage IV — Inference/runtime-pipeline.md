@@ -18,8 +18,8 @@ Current status (code):
 - Fusion implemented with inverse-variance weighting and fallbacks — `models/fusion.py`
 - Post-fusion STABILIZE (EMA + uncertainty gating) integrated as an optional component inside fusion — `models/fusion.py`
 - Overlay/debug utilities available — `utils/fusion_overlay.py`
-- Tests cover fusion math, gating, stabilizer behavior, and overlay — `tests/test_fusion.py`, `tests/test_fusion_overlay.py`
-- MATCH retrieval not yet implemented.
+- Tests cover fusion math, gating, stabilizer behavior, overlay, and retrieval logic — `tests/test_fusion.py`, `tests/test_fusion_overlay.py`, `tests/test_song_matcher.py`
+- MATCH retrieval implemented via `utils/song_matcher.py` (GMM gating + dwell-time); integration with the runtime driver/UI is pending.
 
 ```
 [RUNTIME INFERENCE PIPELINE]
@@ -73,26 +73,26 @@ Current status (code):
   - Note: `window_size` is for metrics history (variance/jitter) only; EMA smoothing/latency depends solely on α.
 
 - MATCH (POC)
-  - Linear-scan k-NN over DEAM songs using static [1, 9] annotations.
-  - Optional: apply GMM station gating from the DEAM clustering notebook
-    (StandardScaler + GaussianMixture) before k-NN.
-  - Enforce minimum dwell time and recent-song avoidance.
-  - Use explicit FE→DEAM static [1, 9] scaling for queries.
-  - Status: not yet implemented.
+  - Implemented in `utils/song_matcher.py` as `SongMatcher` with GMM station gating, dwell-time enforcement, and recent-song memory.
+  - Consumes valence/arousal already in reference space `[-1, 1]`; convert upstream when working directly with FE or DEAM static scales.
+  - Optional: widen the candidate set to the top-2 GMM clusters when posterior confidence falls below the configured threshold.
+  - Tests: `tests/test_song_matcher.py` covers gating, dwell enforcement, recent-history filtering, and artifact loading.
+  - Status: ready for wiring into the runtime driver/frontends.
 
 ## Runtime Driver (PERCEIVE Orchestrator)
 
 Purpose: Single place that coordinates PERCEIVE per frame, returning fused
 valence/arousal and uncertainties to any frontend or the next stages.
 
-- Location: `utils/runtime_driver.py` (skeleton present)
+- Location: `utils/runtime_driver.py`
+- Provides `PerceiveFusionDriver` plus functional helpers `perceive_once` and `perceive_video` that wrap `SceneFaceFusion`.
 - Depends on:
   - `utils/emonet_single_face_processor.EmoNetSingleFaceProcessor`
   - `models.face.emonet_adapter.EmoNetAdapter`
   - `models.fusion.SceneFaceFusion`
   - `utils/fusion_overlay.draw_fusion_overlay` (optional for annotation)
 
-API (proposed):
+API:
 
 ```python
 class PerceiveFusionDriver:
@@ -102,14 +102,28 @@ class PerceiveFusionDriver:
         face_processor: Optional[EmoNetSingleFaceProcessor] = None,
         face_expert: Optional[EmoNetAdapter] = None,
         *,
-        scene_mc_samples: int = 10,
+        scene_mc_samples: int = 5,
         face_tta: int = 5,
+        face_mc_samples: int = 5,
+        face_sampling: str = "weighted",
+        face_sampling_temperature: float = 1.0,
+        face_sampling_seed: Optional[int] = None,
+        face_tta_mode: str = "auto",
         use_variance_weighting: bool = True,
         scene_weight: float = 0.6,
         face_weight: float = 0.4,
-        max_hz: float = 4.0,  # throttle to avoid blocking UIs
+        face_score_threshold: Optional[float] = None,
+        face_max_sigma: Optional[float] = None,
+        brightness_threshold: Optional[float] = None,
+        enable_stabilizer: bool = False,
+        stabilizer_alpha: float = 0.7,
+        uncertainty_threshold: float = 0.4,
+        stabilizer_window: int = 60,
+        max_hz: float = 4.0,
+        variance_floor: Optional[float] = 1e-3,
+        max_weight_ratio: Optional[float] = None,
     ):
-        ...  # assemble SceneFaceFusion internally
+        ...  # assembles SceneFaceFusion internally
 
     def step(self, frame_bgr: np.ndarray) -> FusionResult:
         """Run PERCEIVE on a single BGR frame and fuse outputs."""
@@ -124,18 +138,19 @@ Behavior:
 - If `scene_predictor` is None, driver runs face-only and returns face results.
 - If face detection fails on a frame, falls back to scene-only when available.
 - All outputs in reference space `[-1, 1]`. Variances reflect TTA/MC sampling.
-- Throttling via `max_hz` controls how often PERCEIVE is executed in UIs.
+- Throttling via `max_hz` controls how often PERCEIVE is executed; when throttled the driver reuses the last result.
+- Helper functions `perceive_once` and `perceive_video` expose the same wiring for single frames and full videos.
 
 Scene model integration (later):
 - Provide a `scene_predictor` implementing
   `predict(frame_bgr, tta:int) -> (v,a,(var_v,var_a))` in reference space.
 - No changes to the driver or fusion core are required.
- - A reference adapter is available: `models/scene/clip_vit_scene_adapter.py`.
+- A reference adapter is available: `models/scene/clip_vit_scene_adapter.py`.
 
 TODO:
-- [x] Add `utils/runtime_driver.py` with `PerceiveFusionDriver` skeleton.
-- [ ] Wire `SceneFaceFusion` inside driver (`step()`), pass sampling counts and enable stabilizer as needed.
-- [ ] Connect MATCH (DEAM scaling + linear-scan k-NN; optional GMM gating) after stabilization.
+- [x] Add `utils/runtime_driver.py` with `PerceiveFusionDriver`.
+- [x] Wire `SceneFaceFusion` inside driver (`step()`), pass sampling counts, and expose stabilizer controls.
+- [ ] Connect MATCH (SongMatcher: DEAM scaling + linear-scan k-NN with optional GMM gating) after stabilization.
 
 References:
 - Fusion core and stabilizer: `models/fusion.py`
@@ -144,4 +159,5 @@ References:
 - Scene adapter (CLIP/ViT with MC Dropout): `models/scene/clip_vit_scene_adapter.py`
 - Overlay utility: `utils/fusion_overlay.py`
 - Scale alignment utilities: `utils/emotion_scale_aligner.py`
-- Tests: `tests/test_fusion.py`, `tests/test_fusion_overlay.py`
+- Retrieval core: `utils/song_matcher.py`
+- Tests: `tests/test_fusion.py`, `tests/test_fusion_overlay.py`, `tests/test_song_matcher.py`
