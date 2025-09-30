@@ -63,6 +63,9 @@ class AdaptiveStabilizer:
         return {"variance": np.var(arr, axis=0), "jitter": np.mean(np.abs(np.diff(arr, axis=0)), axis=0)}
 ```
 
+Note on `window_size`:
+- `window_size` controls only the length of the history buffer used to compute stability metrics (variance/jitter). It does not affect EMA smoothing or latency, which depend solely on `alpha`.
+
 ## Integration Points
 - Use variance from MC Dropout in fusion weighting and in gating
 - Apply stabilizer to per-frame fused predictions before matching

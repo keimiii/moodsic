@@ -20,7 +20,8 @@ Extracted from [project_overview.md](../project_overview.md).
 
 ## Mechanism
 
-- EMA smooths frame-to-frame predictions with an α tuned for a 3–5s effective window (default window `60`).
+- EMA smooths frame-to-frame predictions with coefficient α. EMA itself has no fixed window; smoothing and latency depend only on α (recent frames have exponentially higher weight).
+- Metrics window: `window_size` controls only the history length used to compute stability metrics (variance/jitter). Changing `window_size` does not change EMA smoothing behavior or latency.
 - Uncertainty gating: when per-dimension variance `σ²` exceeds threshold `τ`, hold the last stable EMA output instead of updating.
 - Additional pre-fusion guardrails can ignore the face path when it looks unreliable (low detector score, high σ, or low frame brightness).
 - Targets: reduce jitter by ~40–60% without over-dampening and keep acceptable response to genuine shifts.

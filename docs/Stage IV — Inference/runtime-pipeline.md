@@ -70,6 +70,7 @@ Current status (code):
   - Exponential Moving Average (EMA) over valence/arousal.
   - Uncertainty gating: if variance exceeds threshold, hold last stable values.
   - Implemented inside `SceneFaceFusion` (enable with `enable_stabilizer=True`). Defaults: `alpha=0.7`, `τ=0.4`, window `60`.
+  - Note: `window_size` is for metrics history (variance/jitter) only; EMA smoothing/latency depends solely on α.
 
 - MATCH (POC)
   - Linear-scan k-NN over DEAM songs using static [1, 9] annotations.
