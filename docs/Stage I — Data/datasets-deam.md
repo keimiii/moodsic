@@ -1,34 +1,29 @@
 # DEAM Dataset
 
-- [ ] Document FE→DEAM scaling usage in queries
+- [x] Document FE->DEAM scaling usage in queries
+- [x] Stage static SAM annotations for retrieval experiments
+- [x] Record metadata cleaning steps for exploratory clustering work
 
 ## Summary
-- 1,802 songs. For this academic POC we use the static song-level SAM
-  annotations `[1, 9]` for retrieval.
+- 1,802 songs with static SAM valence/arousal labels in `[1, 9]`; we operate at the song level for Stage I.
+- Dynamic per-frame annotations `[-10, 10]` remain available but are unused in current retrieval prototypes.
+- Files live under `data/DEAM/` alongside yearly metadata (2013-2015) and averaged static annotations.
+- Scale conversions reuse the shared aligner to keep the retrieval stack consistent with scene + face outputs (`utils/emotion_scale_aligner.py:56`).
 
-## Dynamic Annotations (reference)
-- Both valence and arousal in range `[-10, 10]` (per-frame). Not used in POC.
-- Example input file: `annotations_dynamic.csv`.
-- Typical sampling rate: `2 Hz`.
+## Directory Snapshot
+- `data/DEAM/static_annotations_averaged_songs_1_2000.csv` and `..._2000_2058.csv`: canonical static labels.
+- `data/DEAM/metadata_{2013,2014,2015}.csv`: raw metadata; use `scripts/deam_cleanup_metadata.py` to extract tidy Id/Artist/Title/Genre columns (`scripts/deam_cleanup_metadata.py:1`).
+- `notebooks/deam/`: clustering and indexing experiments that ingest the cleaned metadata + static annotations.
+- `utils/emotion_pipeline.py:80`: converts EmoNet/FindingEmo predictions to DEAM scale for downstream matching.
 
-## Static Annotations (POC default)
-- Both valence and arousal on a nine-point scale `[1, 9]` (whole 45s excerpt).
-- We retrieve at the song level using these static annotations.
+## Retrieval Policy (Stage I)
+1. Maintain an in-memory table of `(song_id, valence, arousal, optional_cluster)` sourced from the static annotation CSVs.
+2. Stabilize perception outputs in the shared reference space, then project to DEAM using the aligner before search (`utils/emotion_scale_aligner.py:92`).
+3. Perform linear-scan k-NN within the candidate cluster set (GMM posterior threshold ~0.55, otherwise widen to top-2 clusters).
+4. Return top-N songs by Euclidean distance; keep the raw reference-space vector as audit metadata for calibration analysis.
 
-## Song-Level Policy (POC)
-- Retrieval operates at the song level using static V/A.
-- Metadata per song: `song_id`, `valence`, `arousal`, and optional `gmm_cluster`.
-
-## Indexing and Selection
-- Keep a simple table of songs with static `[valence, arousal]` and do a
-  linear-scan k-NN.
-- GMM station gating: assign the stabilized query V/A to the most likely
-  cluster via `predict_proba`; if the top posterior is low (e.g., < 0.55),
-  widen to the top-2 clusters and search within those.
--
-  Rank within the selected cluster set by Euclidean distance between the
-  stabilized V/A and each song’s V/A; pick top-1 (or top-N for variety).
-
-## FE→DEAM Scaling (for queries)
-- Valence: `v_deam = 1 + (8/6) * (v_fe + 3)`
-- Arousal: `a_deam = 1 + (8/6) * a_fe`
+## Notes
+- Use the dynamic annotations only if we progress to sequence-aware matching; current policies ignore them to avoid temporal alignment costs.
+- When adding new songs, regenerate the static annotation table and recompute cluster assignments to preserve posterior thresholds.
+- The retrieval stack expects inputs already smoothed by the stabilizer in the runtime driver (`utils/runtime_driver.py:19`).
+- Any UI-facing conversion back to FindingEmo should route through the same aligner to avoid drift between modalities.

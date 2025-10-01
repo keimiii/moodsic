@@ -56,7 +56,7 @@ Single-source emotion detection also suffers from a fundamental attribution prob
 **Why These Specific Datasets**
 
 We use two carefully selected datasets that share a common emotional measurement system:
-- **FindingEmo**: ≈25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values. In current experiments, 19,606 images were used after dataset filtering; face detection succeeds on ≈38% of these (7,453/19,606) for face-path ablations.
+- **FindingEmo**: ≈25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values. The processed corpus in `data/processed_annotations.csv` keeps 19,738 verified downloads; the latest face-cache covers roughly 7.4k images (~38%) for face-path ablations.
 - **DEAM**: 1,802 songs with the same valence-arousal annotations
 
 This shared measurement system enables direct emotion mapping between video and music. When video shows specific valence-arousal values, we can query music with matching emotional signatures.
@@ -148,7 +148,7 @@ POC Evaluation Plan (Ablations)
 
 Observed Limitations (Aug 25, 2025)
 
-- On FindingEmo, pretrained EmoNet generalizes poorly. Face detection success ≈ 38% (7,453/19,606).
+- On FindingEmo, pretrained EmoNet generalizes poorly. Face detection success ≈ 38% (~7.4k/19.7k).
 - Faces-found results (FindingEmo scale): Valence CCC ≈ 0.167, Arousal CCC ≈ 0.016 (mean ≈ 0.092). Pearson/Spearman for arousal are very low.
 - Simple linear calibration (affine in reference space) does not help; best-affine holdout ceiling remains low (Valence ≈ 0.207, Arousal ≈ 0.016), indicating a domain gap not addressable by linear bias/scale fixes.
 - Conclusion: Use EmoNet as a weak, coverage-limited expert for ablations; prioritize fusion + gating for the headline POC metric.
