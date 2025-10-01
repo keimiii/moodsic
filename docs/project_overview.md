@@ -651,77 +651,50 @@ v_var, a_var = res.fused.var_valence, res.fused.var_arousal
 
 ## 5. Music Matching with Proper Scaling
 
-The matching stage performs frame-level retrieval over DEAM songs (static [1, 9])
-with explicit scale alignment between FindingEmo and DEAM emotion spaces.
+The production matcher is `utils.song_matcher.SongMatcher`. It operates in the
+reference `[-1, 1]` valence/arousal space, so every upstream perception module
+converts its outputs with `EmotionScaleAligner` before calling into the matcher.
+DEAM song tables are precomputed in the same reference space (`valence_ref`,
+`arousal_ref`) to avoid repeated conversions at runtime.
+
+### How the current matcher works
+- **Cluster gating**: incoming `(v_ref, a_ref)` is transformed with the persisted
+  scaler/GMM. Only the most likely clusters (top-1, widen to top-2 if needed)
+  are searched.
+- **Distance ranking**: candidates are sorted by Euclidean distance in reference
+  space. We keep the closest `top_k` rows (default 20).
+- **Dwell + repeat avoidance**: the matcher enforces a minimum dwell time and a
+  fixed-length deque of recent song IDs to prevent rapid switching.
+- **Result surface**: returns a `MatchResult` object containing the selected
+  `pandas.Series`, a `switch` boolean, and the timestamp.
 
 ```python
-class SongLevelMusicMatcher:
-    def __init__(self, deam_processor):
-        self.processor = deam_processor
-        self.songs = deam_processor.songs_metadata  # columns: song_id, valence, arousal
-        
-        # Track recently played to ensure variety
-        self.recent_songs = deque(maxlen=10)
-        self.current_song = None
-        self.song_start_time = None
-        self.min_dwell_time = 20  # seconds
-        
-    def get_music_for_frame(self, valence, arousal, current_time):
-        # Scale from FindingEmo to DEAM static [1, 9] space
-        v_deam, a_deam = self._scale_fe_to_deam_static(valence, arousal)
-        
-        # Check if we should switch songs
-        if self._should_switch_song(current_time):
-            # Find new song
-            new_song = self._find_best_song(v_deam, a_deam)
-            
-            if new_song is not None:
-                self.current_song = new_song
-                self.song_start_time = current_time
-                self.recent_songs.append(new_song['song_id'])
-        
-        return self.current_song
-    
-    def __init__(self, deam_processor):
-        self.processor = deam_processor
-        self.aligner = EmotionScaleAligner()
-        # ... rest of initialization
-    
-    def _scale_fe_to_deam_static(self, valence, arousal):
-        # Use unified aligner for FindingEmo → DEAM static conversion
-        return self.aligner.findingemo_to_deam_static(valence, arousal)
-    
-    def _should_switch_song(self, current_time):
-        # Switch only after minimum dwell time
-        if self.current_song is None:
-            return True
-        
-        time_in_song = current_time - self.song_start_time
-        return time_in_song >= self.min_dwell_time
-    
-    def _find_best_song(self, valence, arousal, k=20):
-        # Linear-scan k nearest songs
-        xy = self.songs[["valence", "arousal"]].to_numpy()
-        d = np.linalg.norm(xy - np.array([valence, arousal]), axis=1)
-        indices = np.argsort(d)[:k]
-        distances = d[indices]
-        
-        # Filter out recently played songs
-        candidates = []
-        for idx, dist in zip(indices[0], distances[0]):
-            song = self.songs.iloc[idx]
-            if song['song_id'] not in self.recent_songs:
-                candidates.append((song, dist))
-        
-        if not candidates:
-            # All songs recently played, allow repetition but pick furthest
-            candidates = [(self.songs.iloc[idx], dist) 
-                         for idx, dist in zip(indices, distances)]
-        
-        # Return best candidate
-        best_song, _ = min(candidates, key=lambda x: x[1])
-        return best_song.to_dict()
+from utils.emotion_scale_aligner import EmotionScaleAligner
+from utils.song_matcher import SongMatcher
+
+aligner = EmotionScaleAligner()
+v_ref, a_ref = aligner.findingemo_to_reference(v_fe, a_fe)
+
+matcher = SongMatcher(
+    songs_df=songs_df,
+    scaler=gmm_scaler,
+    gmm=gmm_model,
+    min_dwell_time=25.0,
+    recent_k=5,
+)
+
+match = matcher.recommend(v_ref, a_ref)
+if match.switch:
+    play(match.song["song_id"])
 ```
+
+### Roadmap
+
+Therapeutic progression (gradual improvements, regulation strategies, etc.) is
+not implemented yet. Future directions are captured in
+`docs/music_mapping.md` under “Planned Therapeutic Mapping,” and that document
+will serve as the staging ground for any enhancements that build on top of the
+current SongMatcher.
 
 ---
 
@@ -844,6 +817,11 @@ If face detection fails frequently, the system gracefully degrades to scene-only
 import gradio as gr
 import cv2
 import time
+import joblib
+import pandas as pd
+
+from utils.emotion_scale_aligner import EmotionScaleAligner
+from utils.song_matcher import SongMatcher
 
 class EmotionMusicDemo:
     def __init__(self):
@@ -859,7 +837,17 @@ class EmotionMusicDemo:
             stabilizer_alpha=0.7,
             uncertainty_threshold=0.4,
         )
-        self.matcher = SongLevelMusicMatcher(DEAMSongProcessor('./deam_data'))
+        songs_df = pd.read_parquet('data/deam_reference.parquet')
+        scaler = joblib.load('artifacts/music_scaler.pkl')
+        gmm = joblib.load('artifacts/music_gmm.pkl')
+        self.matcher = SongMatcher(
+            songs_df=songs_df,
+            scaler=scaler,
+            gmm=gmm,
+            min_dwell_time=25.0,
+            recent_k=5,
+        )
+        self.aligner = EmotionScaleAligner()
         
     def process_video(self, video_path, show_face_crops=True):
         cap = cv2.VideoCapture(video_path)
@@ -909,7 +897,9 @@ class EmotionMusicDemo:
                 v_stable, a_stable = valence, arousal
                 
                 # Get music recommendation
-                song = self.matcher.get_music_for_frame(v_stable, a_stable, current_time)
+                v_deam, a_deam = self.aligner.reference_to_deam_static(v_stable, a_stable)
+                match = self.matcher.recommend(v_stable, a_stable, now=current_time)
+                song = match.song.to_dict() if match.song is not None else None
                 
                 # Record results
                 results['emotion_timeline'].append({
@@ -918,11 +908,12 @@ class EmotionMusicDemo:
                     'arousal_raw': arousal,
                     'valence_stable': v_stable,
                     'arousal_stable': a_stable,
-                    'variance': variance
+                    'variance': variance,
+                    'valence_deam': float(v_deam),
+                    'arousal_deam': float(a_deam)
                 })
                 
-                if song and (not results['songs'] or 
-                              results['songs'][-1]['song_id'] != song['song_id']):
+                if match.switch and song:
                     results['songs'].append({
                         'start_time': current_time,
                         'song_id': song['song_id'],
