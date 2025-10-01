@@ -29,24 +29,15 @@ References (key artifacts in repo):
 
 Status: Completed (trained via notebooks; heads saved under `scene/checkpoints/`). Inference adapter implemented in `models/scene/clip_vit_scene_adapter.py`.
 
-```python
-class PhaseTrainer:
-    def train_phase_0(self):
-        scene_dls = self._prepare_scene_dataloaders()
-        scene_model = SceneEmotionRegressor()
-        learn = Learner(
-            scene_dls,
-            scene_model,
-            loss_func=F.mse_loss,
-            metrics=[mae],
-            cbs=[EarlyStoppingCallback(patience=5)]
-        )
-        lr = learn.lr_find().valley
-        learn.fit_one_cycle(10, lr_max=lr)
-        scene_model.backbone.requires_grad_(True)
-        learn.fit_one_cycle(5, lr_max=slice(lr/100, lr/10))
-        return learn
-```
+Notebook recipe:
+1. Build FastAI dataloaders pointing at `data/train.csv`, `data/valid.csv`, and
+   `data/test.csv` with CLIP preprocessing.
+2. Instantiate `SceneCLIPAdapter` with `auto_load_best=False` so fresh heads are
+   trained while reusing the CLIP backbone.
+3. Freeze the backbone and train the heads for ten epochs with one-cycle
+   scheduling (seeded by `learn.lr_find().valley`).
+4. Unfreeze selectively for five fine tune epochs before exporting
+   `models/scene/best_model.pkl` (adapter checkpoints live there).
 
 ## Phase 1 — EmoNet Integration + Domain Calibration
 

@@ -1,91 +1,55 @@
 # Scene Model
 
-- [ ] Choose backbone (CLIP/ViT) and freeze strategy
-- [ ] Implement regression heads with dropout for V/A
-- [ ] Enable MC Dropout for uncertainty estimation
-- [ ] Define CLIP preprocessing and batching
+- [x] Choose backbone (CLIP ViT) and freeze strategy
+- [x] Implement regression heads with dropout for valence and arousal
+- [x] Enable MC Dropout style sampling for uncertainty
+- [x] Define CLIP preprocessing and batching
 
-## Overview
-Scene-based emotion regressor using CLIP/ViT features with lightweight regression heads to predict continuous valence and arousal. Backbone parameters are frozen initially, with optional fine-tuning later.
+## Summary
+The production scene path is implemented as `SceneCLIPAdapter` in
+`models/scene/clip_vit_scene_adapter.py`. It wraps a frozen CLIP ViT backbone,
+adds lightweight regression heads, and exposes a `predict` API that returns
+valence, arousal, and per-dimension variance. Training notebooks export the
+dropout heads, and inference loads them automatically from
+`models/scene/best_model.pkl` (or a caller supplied checkpoint).
 
-## Backbone
-- Default: `openai/clip-vit-base-patch32`
-- Feature dimension: `projection_dim` from CLIP config
-- Initial training with backbone frozen; unfreeze for fine-tuning epochs
+## Backbone and Preprocessing
+- Backbone: `openai/clip-vit-base-patch32` vision encoder from Hugging Face
+  transformers (configurable via `model_name`).
+- Parameters remain frozen during inference; fine tuning is handled in
+  notebooks before weights are saved.
+- Preprocessing uses `CLIPImageProcessor.from_pretrained(model_name)` to
+  produce `pixel_values` tensors from BGR numpy frames (the adapter handles the
+  BGR to RGB conversion internally).
 
-## Preprocessing
-Use CLIP processor to produce `pixel_values` tensors.
+## Adapter API
+- Input: BGR `np.ndarray` of shape `[H, W, 3]`.
+- Output: `(valence: float, arousal: float, (var_valence: float, var_arousal: float))`
+  in reference space `[-1, 1]`.
+- Sampling: `tta` argument controls the number of stochastic passes (default 5).
+- Invalid input (missing frame or wrong shape) returns neutral zeros and zero
+  variance.
 
 ```python
-from transformers import CLIPProcessor
+from models.scene import SceneCLIPAdapter
 
-# Example
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
-def preprocess_batch(pil_images, device):
-    batch = processor(images=pil_images, return_tensors="pt")
-    return batch["pixel_values"].to(device)
+scene_adapter = SceneCLIPAdapter(tta=5, auto_load_best=True)
+v, a, (v_var, a_var) = scene_adapter.predict(frame_bgr)
 ```
 
-## Model Architecture
-Two parallel heads (valence and arousal) with dropout for stochasticity.
+## Training Notes
+- Training scripts live in `notebooks/scene/` and export learned heads to
+  `scene/checkpoints/*`.
+- `SceneCLIPAdapter` auto loads `models/scene/best_model.pkl` unless a custom
+  `weights_path` is provided.
+- MC Dropout is achieved by leaving dropout layers in train mode during sampling
+  while keeping linear and layer norm modules in eval mode.
+- Batch inference is supported via CLIP processors, but runtime defaults to
+  batch size 1 (per frame processing).
 
-```python
-import torch
-import torch.nn as nn
-from transformers import CLIPModel, CLIPProcessor
-
-class SceneEmotionRegressor(nn.Module):
-    def __init__(self, model_name="openai/clip-vit-base-patch32", dropout_rate=0.3):
-        super().__init__()
-        self.backbone = CLIPModel.from_pretrained(model_name)
-        self.processor = CLIPProcessor.from_pretrained(model_name)
-        self.feature_dim = self.backbone.config.projection_dim
-
-        for p in self.backbone.parameters():
-            p.requires_grad = False
-
-        self.dropout = nn.Dropout(dropout_rate)
-        self.valence_head = self._head()
-        self.arousal_head = self._head()
-
-    def _head(self):
-        return nn.Sequential(
-            nn.Linear(self.feature_dim, 256),
-            nn.LayerNorm(256),
-            nn.ReLU(),
-            self.dropout,
-            nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.ReLU(),
-            self.dropout,
-            nn.Linear(128, 1)
-        )
-
-    def forward(self, pixel_values, n_samples=1):
-        if n_samples > 1:
-            return self._mc_forward(pixel_values, n_samples)
-        feats = self.backbone.get_image_features(pixel_values)
-        feats = self.dropout(feats)
-        v = self.valence_head(feats).squeeze()
-        a = self.arousal_head(feats).squeeze()
-        return v, a
-
-    def _mc_forward(self, pixel_values, n_samples):
-        was_training = self.training
-        self.train(True)
-        preds = []
-        with torch.no_grad():
-            for _ in range(n_samples):
-                v, a = self.forward(pixel_values, n_samples=1)
-                preds.append(torch.stack([v, a]))
-        preds = torch.stack(preds)
-        mean = preds.mean(dim=0)
-        var = preds.var(dim=0)
-        self.train(was_training)
-        return mean, var
-```
-
-## Defaults
-- MC Dropout samples: `n_samples = 5` (tunable)
-- Use EMA and uncertainty gating downstream for stability (see Uncertainty and Gating)
+## Integration Checklist
+- [x] Adapter wired into `SceneFaceFusion` via `scene_predictor` argument.
+- [x] Tests in `tests/test_perceive_e2e_flow.py` import `SceneCLIPAdapter` and
+  exercise the predict path (skipped when torch or transformers are absent).
+- [x] Runtime driver (`utils/runtime_driver.py`) instantiates the adapter when
+  scene perception is enabled.

@@ -98,5 +98,5 @@ due to occlusion, low light, or weak detections. Tune on a validation slice.
     path reduces noise and jitter.
 
 Implementation details: these guardrails are implemented in `SceneFaceFusion`
-and are disabled by default. See the fusion module’s constructor for how to
+(`models/fusion.py`) and are disabled by default. See the fusion module’s constructor for how to
 enable and pass custom thresholds.

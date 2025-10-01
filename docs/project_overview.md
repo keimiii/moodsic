@@ -368,77 +368,30 @@ DEAM Dataset (1802 songs with dynamic V-A)
 
 The initial phase establishes a functional system addressing the most critical requirements while maintaining simplicity. This phase focuses on scene-based emotion recognition with proper temporal handling and stability mechanisms.
 
-#### Scene-based Emotion Regressor
+#### Scene-based Emotion Adapter
 
-The scene model leverages pre-trained CLIP or Vision Transformer architectures with minimal modifications. The implementation maintains the transfer learning approach while adding uncertainty estimation capabilities essential for stable recommendations.
+We ship the scene path as `SceneCLIPAdapter` (`models/scene/clip_vit_scene_adapter.py`).
+It freezes a CLIP ViT backbone, adds dropout regression heads, and exposes a
+`predict(frame_bgr, tta)` method that returns valence, arousal, and per-dimension
+variance in reference space `[-1, 1]`.
+
+- Backbone: `openai/clip-vit-base-patch32` (configurable) with parameters frozen
+  at inference time.
+- Heads: two lightweight MLPs trained offline in `notebooks/scene/` and saved
+  to `models/scene/best_model.pkl`.
+- Uncertainty: MC Dropout is achieved by enabling dropout layers for a handful
+  of stochastic forward passes (`tta` samples).
 
 ```python
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from transformers import CLIPModel, CLIPProcessor
+from models.scene import SceneCLIPAdapter
 
-class SceneEmotionRegressor(nn.Module):
-    def __init__(self, model_name="openai/clip-vit-base-patch32", dropout_rate=0.3):
-        super().__init__()
-        self.backbone = CLIPModel.from_pretrained(model_name)
-        self.processor = CLIPProcessor.from_pretrained(model_name)
-        self.feature_dim = self.backbone.config.projection_dim
-        
-        # Freeze backbone initially
-        for param in self.backbone.parameters():
-            param.requires_grad = False
-        
-        # Regression heads with dropout for uncertainty
-        self.dropout = nn.Dropout(dropout_rate)
-        self.valence_head = self._create_head()
-        self.arousal_head = self._create_head()
-        
-    def _create_head(self):
-        return nn.Sequential(
-            nn.Linear(self.feature_dim, 256),
-            nn.LayerNorm(256),
-            nn.ReLU(),
-            self.dropout,
-            nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.ReLU(),
-            self.dropout,
-            nn.Linear(128, 1)
-        )
-    
-    def preprocess_batch(self, pil_images, device):
-        # CLIP-normalized pixel_values expected by get_image_features
-        batch = self.processor(images=pil_images, return_tensors="pt")
-        return batch["pixel_values"].to(device)
-    
-    def forward(self, pixel_values, n_samples=1):
-        if n_samples > 1:
-            # MC Dropout for uncertainty estimation
-            return self._mc_forward(pixel_values, n_samples)
-        
-        features = self.backbone.get_image_features(pixel_values)
-        features = self.dropout(features)
-        valence = self.valence_head(features)
-        arousal = self.arousal_head(features)
-        
-        return valence.squeeze(), arousal.squeeze()
-    
-    def _mc_forward(self, pixel_values, n_samples):
-        # Enable dropout during multiple stochastic forward passes
-        was_training = self.training
-        self.train(True)
-        predictions = []
-        with torch.no_grad():
-            for _ in range(n_samples):
-                v, a = self.forward(pixel_values, n_samples=1)
-                predictions.append(torch.stack([v, a]))
-        predictions = torch.stack(predictions)
-        mean = predictions.mean(dim=0)
-        variance = predictions.var(dim=0)
-        self.train(was_training)
-        return mean, variance
+scene_adapter = SceneCLIPAdapter(tta=5, auto_load_best=True)
+valence, arousal, (v_var, a_var) = scene_adapter.predict(frame_bgr)
 ```
+
+Training remains notebook-driven: we load the same CLIP backbone, freeze it for
+Phase 0, fine tune the regression heads, and export a checkpoint the adapter can
+consume. Future iterations can promote that notebook code into a script.
 
 #### Song-level DEAM Matching (POC default)
 
@@ -784,45 +737,15 @@ We use EmoNet as the face expert with no face dataset or training required. This
 
 The training covers only the scene model. The face path uses EmoNet as a fixed pretrained expert and is not trained or fine-tuned.
 
-```python
-from fastai.vision.all import *
-from fastai.callback.all import *
-
-class PhaseTrainer:
-    def __init__(self, data_path):
-        self.data_path = data_path
-        
-    def train_phase_0(self):
-        # Scene model training
-        scene_dls = self._prepare_scene_dataloaders()
-        scene_model = SceneEmotionRegressor()
-        
-        learn = Learner(
-            scene_dls,
-            scene_model,
-            loss_func=self._loss,
-            metrics=[mae],
-            cbs=[EarlyStoppingCallback(patience=5)]
-        )
-        
-        # Find optimal LR
-        lr = learn.lr_find().valley
-        
-        # Train with frozen backbone (10 epochs)
-        learn.fit_one_cycle(10, lr_max=lr)
-        
-        # Fine-tune with unfrozen layers (5 epochs)
-        scene_model.backbone.requires_grad_(True)
-        learn.fit_one_cycle(5, lr_max=slice(lr/100, lr/10))
-        
-        return learn
-    
-    # Face training is not used: EmoNet is the face expert and remains fixed (no training).
-    
-    def _loss(self, pred, target):
-        # MSE in reference space [-1, 1]
-        return F.mse_loss(pred, target)
-```
+Phase 0 notebook workflow (high level):
+1. Prepare FastAI dataloaders with CLIP preprocessing (`CLIPImageProcessor`).
+2. Instantiate `SceneCLIPAdapter` with `auto_load_best=False` to reuse the
+   backbone and initialize fresh heads.
+3. Freeze the CLIP backbone and train only the heads for ten epochs using a
+   one-cycle schedule (LR finder to seed `lr_max`).
+4. Unfreeze selected backbone layers for a brief fine tune and export the
+   resulting state dict to `models/scene/best_model.pkl`.
+5. Leave the face path untouched (EmoNet remains a fixed pretrained expert).
 
 ---
 
