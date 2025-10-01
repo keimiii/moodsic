@@ -106,8 +106,10 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 **Intended usage in this project**
 - VEATIC serves as the primary video inference/benchmark dataset to validate vision models’ V/A predictions under realistic, context-rich conditions. We evaluate using V/A MAE (primary), plus MSE and rank-based correlations (Spearman’s ρ; Pearson r) as supplemental diagnostics.
 
-**Integration status (TBD)**
-- We will integrate VEATIC labels into the inference/evaluation pipeline. The exact preprocessing and wiring are not finalized. We are considering lightweight temporal preprocessing (e.g., smoothing and modest downsampling) to align label cadence with model outputs and reduce per-frame jitter; final choices will be documented once decided.
+**Integration status**
+- Runtime helper `perceive_video` samples VEATIC clips at approximately 1 fps by default (`target_sample_fps=1.0`) to align with label cadence and keep fusion outputs manageable; see `docs/Stage IV — Inference/veatic_inference.md` for the full rundown.
+- Fusion guardrails and optional EMA stabilizer follow the demo configuration in `notebooks/e2e_video_to_fusion.ipynb`; enable smoothing when benchmarking jitter-sensitive metrics.
+- Pending: final wiring that aligns sampled frames with VEATIC labels for aggregate MAE/ρ reporting and dashboard visualizations.
 
 **Licensing note**
 - VEATIC is available for research purposes; copyright remains with the original owners of the video content. Redistribution and commercial use are restricted per the project’s terms.
