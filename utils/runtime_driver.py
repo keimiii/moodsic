@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import StatisticsError, median, mode
 from typing import Optional, Sequence, Union, List
 
 # Import types with a soft fallback to keep import-time light in constrained envs
@@ -194,8 +195,12 @@ class VideoPerceptionResult:
     last_overlay: Optional["np.ndarray"] = None
     fusion_results: Optional[List[FusionResult]] = None
     overlay_path: Optional[Path] = None
-    average_valence: Optional[float] = None
-    average_arousal: Optional[float] = None
+    mean_valence: Optional[float] = None
+    mean_arousal: Optional[float] = None
+    median_valence: Optional[float] = None
+    median_arousal: Optional[float] = None
+    mode_valence: Optional[float] = None
+    mode_arousal: Optional[float] = None
 
 
 __all__ = ["PerceiveFusionDriver", "VideoPerceptionResult"]
@@ -493,8 +498,26 @@ def perceive_video(
         if writer is not None:
             writer.release()
 
-    avg_valence = float(sum(vals) / processed) if processed else None
-    avg_arousal = float(sum(aros) / processed) if processed else None
+    if processed:
+        mean_valence = float(sum(vals) / processed)
+        mean_arousal = float(sum(aros) / processed)
+        median_valence = float(median(vals))
+        median_arousal = float(median(aros))
+        try:
+            mode_valence = float(mode(vals))
+        except StatisticsError:
+            mode_valence = None
+        try:
+            mode_arousal = float(mode(aros))
+        except StatisticsError:
+            mode_arousal = None
+    else:
+        mean_valence = None
+        mean_arousal = None
+        median_valence = None
+        median_arousal = None
+        mode_valence = None
+        mode_arousal = None
 
     result = VideoPerceptionResult(
         video_path=src,
@@ -514,8 +537,12 @@ def perceive_video(
         last_overlay=last_overlay if capture_overlays else None,
         fusion_results=fusion_results if return_fusion else None,
         overlay_path=out_path if writer is not None else None,
-        average_valence=avg_valence,
-        average_arousal=avg_arousal,
+        mean_valence=mean_valence,
+        mean_arousal=mean_arousal,
+        median_valence=median_valence,
+        median_arousal=median_arousal,
+        mode_valence=mode_valence,
+        mode_arousal=mode_arousal,
     )
 
     return result
