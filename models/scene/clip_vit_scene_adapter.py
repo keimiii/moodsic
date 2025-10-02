@@ -85,7 +85,7 @@ class SceneCLIPAdapter:
 
         # Optionally load trained weights (heads and/or backbone) from checkpoint
         if auto_load_best:
-            default_path = Path(__file__).resolve().parent / "best_model.pkl"
+            default_path = self._default_checkpoint_path()
             ckpt = Path(weights_path) if weights_path else default_path
             self._maybe_load_weights(ckpt)
 
@@ -199,6 +199,15 @@ class SceneCLIPAdapter:
         except Exception:
             return torch.device("cpu")
 
+    @staticmethod
+    def _default_checkpoint_path() -> Path:
+        repo_root = Path(__file__).resolve().parents[2]
+        candidate = repo_root / "scene/checkpoints/clip_vit-b32_model_learner.pkl"
+        if candidate.exists():
+            return candidate
+        # Fallback for legacy deployments
+        return Path(__file__).resolve().parent / "best_model.pkl"
+
     # ---- Weights loading -------------------------------------------------
     def _maybe_load_weights(self, ckpt_path: Path) -> None:
         """
@@ -229,11 +238,22 @@ class SceneCLIPAdapter:
             if state is None:
                 return
 
+            # Support objects with a direct state_dict (e.g., fastai Learner exports)
+            if hasattr(state, "state_dict") and callable(getattr(state, "state_dict")):
+                try:
+                    state = state.state_dict()  # type: ignore
+                except Exception:
+                    state = None
+
+            if state is None:
+                return
+
             # If nested under common keys, unwrap
             if isinstance(state, dict):
-                for key in ("state_dict", "model_state_dict", "weights"):
-                    if key in state and isinstance(state[key], dict):
-                        state = state[key]
+                for key in ("state_dict", "model_state_dict", "weights", "model"):
+                    nested = state.get(key) if isinstance(state, dict) else None
+                    if isinstance(nested, dict):
+                        state = nested
                         break
 
             if not isinstance(state, dict):

@@ -41,7 +41,7 @@ Model: SceneCLIPAdapter (clip-vit-base-patch32, dropout=0.3 heads)
 Train: epochs=10(frozen heads)+5(partial unfreeze), bs=..., lr=...
 Loss: MSE; Metrics: MAE_v=..., MAE_a=..., MAE_avg=...; Spearman ρ (optional)
 Notes: early_stopping=patience5; lr_find.valley=...
-Checkpoint: models/scene/best_model.pkl
+Checkpoint: scene/checkpoints/clip_vit-b32_model_learner.pkl
 ```
 
 ```text
