@@ -174,7 +174,7 @@ detections, aligns each crop, runs EmoNet with stochastic TTA, and aggregates
 both intra-face and inter-face uncertainty before fusion. The scene path now
 standardizes on the CLIP ViT-B/32 adapter trained in
 `notebooks/scene/CLIP_ViT-B32_improved.ipynb`, exported as
-`scene/checkpoints/clip_vit-b32_model_learner.pkl`. Earlier DINO/ResNet experiments remain available
+`scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`. Earlier DINO/ResNet experiments remain available
 for reference, and fusion continues to use inverse-variance weighting informed
 by the richer variance signal.
 
@@ -185,7 +185,7 @@ by the richer variance signal.
   `docs/scene_model_ablation.md`) showed this configuration delivering the best
   FindingEmo performance once all scores were reported in the common [-1, 1]
   space using `fe_to_ref` scaling. The exported checkpoint lives at
-  `scene/checkpoints/clip_vit-b32_model_learner.pkl` and is loaded
+  `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` and is loaded
   automatically by `SceneCLIPAdapter`.
 - Performance snapshot (FindingEmo, reference [-1, 1]):
   - Valence MAE: 0.3561
@@ -380,7 +380,7 @@ variance in reference space `[-1, 1]`.
 - Backbone: `openai/clip-vit-base-patch32` (configurable) with parameters frozen
   at inference time.
 - Heads: two lightweight MLPs trained offline in `notebooks/scene/` and saved
-  to `scene/checkpoints/clip_vit-b32_model_learner.pkl`.
+  to `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`.
 - Uncertainty: MC Dropout is achieved by enabling dropout layers for a handful
   of stochastic forward passes (`tta` samples).
 
@@ -719,7 +719,7 @@ Phase 0 notebook workflow (high level):
 3. Freeze the CLIP backbone and train only the heads for ten epochs using a
    one-cycle schedule (LR finder to seed `lr_max`).
 4. Unfreeze selected backbone layers for a brief fine tune and export the
-   resulting state dict to `scene/checkpoints/clip_vit-b32_model_learner.pkl`.
+   resulting state dict to `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`.
 5. Leave the face path untouched (EmoNet remains a fixed pretrained expert).
 
 ---

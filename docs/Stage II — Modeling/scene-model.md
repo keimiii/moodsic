@@ -11,7 +11,7 @@ The production scene path is implemented as `SceneCLIPAdapter` in
 adds lightweight regression heads, and exposes a `predict` API that returns
 valence, arousal, and per-dimension variance. Training notebooks export the
 dropout heads, and inference loads them automatically from
-`scene/checkpoints/clip_vit-b32_model_learner.pkl` (or a caller supplied
+`scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` (or a caller supplied
 checkpoint).
 
 ## Backbone and Preprocessing
@@ -42,7 +42,7 @@ v, a, (v_var, a_var) = scene_adapter.predict(frame_bgr)
 - Training scripts live in `notebooks/scene/` and export learned heads to
   `scene/checkpoints/*`.
 - `SceneCLIPAdapter` auto loads
-  `scene/checkpoints/clip_vit-b32_model_learner.pkl` unless a custom
+  `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` unless a custom
   `weights_path` is provided.
 - MC Dropout is achieved by leaving dropout layers in train mode during sampling
   while keeping linear and layer norm modules in eval mode.

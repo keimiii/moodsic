@@ -202,11 +202,12 @@ class SceneCLIPAdapter:
     @staticmethod
     def _default_checkpoint_path() -> Path:
         repo_root = Path(__file__).resolve().parents[2]
-        candidate = repo_root / "scene/checkpoints/clip_vit-b32_model_learner.pkl"
+        candidate = repo_root / "scene/checkpoints/clip_vit-b32_model_improved_learner.pkl"
         if candidate.exists():
             return candidate
-        # Fallback for legacy deployments
-        return Path(__file__).resolve().parent / "best_model.pkl"
+        raise FileNotFoundError(
+            "SceneCLIPAdapter expected 'scene/checkpoints/clip_vit-b32_model_improved_learner.pkl'"
+        )
 
     # ---- Weights loading -------------------------------------------------
     def _maybe_load_weights(self, ckpt_path: Path) -> None:
