@@ -15,6 +15,27 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 - Choose the nearest candidate not in recent memory; allow repeat if all blocked.
 - Only switch when minimum dwell time has elapsed.
 
+### Why not pick clusters by raw Euclidean distance?
+
+The GMM gate is more than a list of centroids: it was fit on the DEAM songs
+after standardizing valence/arousal with the learned `StandardScaler`. Each
+component therefore carries a mean, a full covariance matrix, and a mixing
+weight in that standardized space. Feeding a fused V/A directly into
+`predict_proba` first runs the same scaling transform, then evaluates
+Mahalanobis distance under every component and blends the result with the
+component priors. The returned posteriors behave like confidence scores, which
+we use to decide whether to stick with the top cluster or widen to the top two.
+
+If we skipped the scaler and just measured Euclidean distance to the centers
+we would implicitly assume every cluster is spherical, equally dense, and
+defined in the unscaled reference space—none of which is true for DEAM. The
+true clusters are elongated and imbalanced: distance alone would over-select
+large diffuse components and under-select compact ones, and it cannot encode a
+threshold such as “only switch stations when the posterior exceeds 0.55.” By
+reusing the scaler+GMM pair exactly as trained we keep runtime behaviour
+consistent with model fitting, preserve calibrated confidence, and avoid
+re-implementing the mixture logic ourselves.
+
 ## Reference implementation
 
 ```python
