@@ -38,12 +38,13 @@ Quick shortcuts for common tasks:
 - **Package Installation**: Use `uv pip install <package>` (not regular `pip install`) 
 
 ## Architecture
-- **Main app**: `app.py` - Streamlit web app with WebRTC camera streaming and video filters
-- **Dataset**: `scripts/findingemo_parallel_download.py` - Fast parallel downloader for FindingEmo dataset
-- **Data**: `data/` directory contains Run_1/ and Run_2/ subfolders from dataset
+- **Main app**: `app.py` - placeholder Streamlit entry point; front-end wiring not implemented yet
+- **Datasets**: FindingEmo (`scripts/findingemo_parallel_download.py` downloader), DEAM, and VEATIC
+- **Data**: `data/` directory currently holds FindingEmo `Run_1/` and `Run_2/` subfolders; other datasets live alongside per task needs
 - **Dependencies**: Streamlit, OpenCV, WebRTC, av, numpy for video processing
 
 ## Code Style
 - **Imports**: Standard library first, then third-party (streamlit, cv2, numpy, etc.)
 - **Naming**: snake_case for variables/functions, PascalCase for classes (VideoTransformer)
 - **Style**: Clean, readable code with good spacing and comments
+- **Implementation Notes**: After every code change, add a brief trailing comment summarizing whether the solution is over-engineered given the academic, time-boxed POC scope, noting any simpler viable alternatives or failures.
