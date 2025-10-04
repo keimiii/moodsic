@@ -4,7 +4,7 @@ A ReactJS Flask application that analyzes video emotions and recommends music ba
 
 ## Features
 
-- **Video Upload**: Upload videos for emotion analysis
+- **Video Selection**: Choose from preselected videos (4.mp4, 44.mp4, 60.mp4 from VEATIC dataset)
 - **Emotion Analysis**: Extract valence and arousal scores (currently using static values)
 - **Cluster Visualization**: Interactive 2D plot showing emotion clusters
 - **Music Recommendation**: Get song recommendations based on emotion analysis
@@ -66,14 +66,16 @@ A ReactJS Flask application that analyzes video emotions and recommends music ba
 ## Usage
 
 1. Open your browser and go to `http://localhost:3000`
-2. Click "Upload Video" to select a video file
-3. Click "Analyze" to process the video
+2. Select one of the available videos (Video 4, Video 44, or Video 60)
+3. Click "Analyze" to process the selected video
 4. View the emotion analysis results and cluster visualization
 5. Listen to the recommended song
 
 ## API Endpoints
 
-- `POST /api/process-video` - Process uploaded video and return emotion analysis
+- `GET /api/videos` - Get list of available videos
+- `GET /api/video/<video_id>` - Serve video file for a given video ID
+- `POST /api/process-video` - Process selected video and return emotion analysis
 - `GET /api/song/<song_id>` - Serve audio file for a given song ID
 - `GET /api/clusters` - Get cluster information for visualization
 - `GET /api/health` - Health check endpoint

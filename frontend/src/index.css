@@ -177,13 +177,53 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.file-input {
-  display: none;
+.video-selection {
+  margin-bottom: 1rem;
 }
 
-.file-input-label {
+.video-selection h3 {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.video-options {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.video-option {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  min-width: 80px;
+}
+
+.video-option:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.video-option.selected {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+}
+
+.analyze-button {
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.4);
   color: white;
   padding: 0.75rem 2rem;
   border-radius: 8px;
@@ -191,13 +231,14 @@ button:disabled {
   font-size: 1rem;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
-  display: inline-block;
+  display: block;
+  margin: 0 auto;
 }
 
-.file-input-label:hover {
-  background: rgba(255, 255, 255, 0.2);
+.analyze-button:hover:not(:disabled) {
+  background: rgba(102, 126, 234, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .scene-indicator {

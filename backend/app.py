@@ -17,29 +17,26 @@ CORS(app)
 # In a real implementation, you would load the trained models here
 scaler, gmm, songs_df = None, None, None
 
-def process_video_for_emotion(video_path):
+def process_video_for_emotion(video_id):
     """
     Process video to extract emotion features
     This is a placeholder - in a real implementation, you would:
-    1. Extract frames from video
-    2. Run face detection and emotion recognition
-    3. Run scene analysis
-    4. Fuse the results
+    1. Load video from data/VEATIC/videos/{video_id}.mp4
+    2. Extract frames from video
+    3. Run face detection and emotion recognition
+    4. Run scene analysis
+    5. Fuse the results
     """
-    # For now, return static values based on the index.html examples
+    # For now, return different static values based on video_id
     # In a real implementation, this would use your trained models
-    mock_scenes = [
-        {"valence": 0.37, "arousal": 0.34, "cluster_id": 0},
-        {"valence": 0.41, "arousal": 0.49, "cluster_id": 0},
-        {"valence": -0.33, "arousal": -0.44, "cluster_id": 1},
-        {"valence": 0.14, "arousal": 0.16, "cluster_id": 2},
-        {"valence": -0.21, "arousal": 0.02, "cluster_id": 3},
-        {"valence": 0.01, "arousal": -0.26, "cluster_id": 4}
-    ]
+    video_scenes = {
+        "4": {"valence": 0.37, "arousal": 0.34, "cluster_id": 0},
+        "44": {"valence": -0.33, "arousal": -0.44, "cluster_id": 1},
+        "60": {"valence": 0.14, "arousal": 0.16, "cluster_id": 2}
+    }
     
-    # Return a random scene for demo purposes
-    import random
-    return random.choice(mock_scenes)
+    # Return the scene for the specific video
+    return video_scenes.get(video_id, {"valence": 0.0, "arousal": 0.0, "cluster_id": 0})
 
 def recommend_song(valence, arousal, cluster_id):
     """
@@ -56,48 +53,69 @@ def recommend_song(valence, arousal, cluster_id):
     ]
     return mock_songs[cluster_id % len(mock_songs)]
 
+@app.route('/api/videos')
+def get_videos():
+    """
+    Get list of available videos
+    """
+    videos = [
+        {"id": "4", "name": "Video 4", "filename": "4.mp4"},
+        {"id": "44", "name": "Video 44", "filename": "44.mp4"},
+        {"id": "60", "name": "Video 60", "filename": "60.mp4"}
+    ]
+    return jsonify(videos)
+
+@app.route('/api/video/<video_id>')
+def get_video(video_id):
+    """
+    Serve video file for a given video ID
+    """
+    try:
+        video_path = Path(f"../data/VEATIC/videos/{video_id}.mp4")
+        if video_path.exists():
+            return send_file(str(video_path), as_attachment=False)
+        else:
+            return jsonify({'error': 'Video not found'}), 404
+    except Exception as e:
+        return jsonify({'error': f'Error serving video: {str(e)}'}), 500
+
 @app.route('/api/process-video', methods=['POST'])
 def process_video():
     """
-    Process uploaded video and return emotion analysis + song recommendation
+    Process selected video and return emotion analysis + song recommendation
     """
     try:
-        if 'video' not in request.files:
-            return jsonify({'error': 'No video file provided'}), 400
+        data = request.get_json()
+        if not data or 'video_id' not in data:
+            return jsonify({'error': 'No video ID provided'}), 400
         
-        video_file = request.files['video']
-        if video_file.filename == '':
-            return jsonify({'error': 'No video file selected'}), 400
+        video_id = data['video_id']
         
-        # Save video to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
-            video_file.save(tmp_file.name)
-            video_path = tmp_file.name
+        # Validate video ID
+        valid_videos = ["4", "44", "60"]
+        if video_id not in valid_videos:
+            return jsonify({'error': 'Invalid video ID'}), 400
         
-        try:
-            # Process video for emotion (placeholder implementation)
-            emotion_result = process_video_for_emotion(video_path)
-            
-            # Get song recommendation
-            song_recommendation = recommend_song(
-                emotion_result["valence"], 
-                emotion_result["arousal"], 
-                emotion_result["cluster_id"]
-            )
-            
-            # Return results
-            result = {
-                "valence": emotion_result["valence"],
-                "arousal": emotion_result["arousal"],
-                "cluster_id": emotion_result["cluster_id"],
-                "song": song_recommendation
-            }
-            
-            return jsonify(result)
-            
-        finally:
-            # Clean up temporary file
-            os.unlink(video_path)
+        # Process video for emotion (placeholder implementation)
+        emotion_result = process_video_for_emotion(video_id)
+        
+        # Get song recommendation
+        song_recommendation = recommend_song(
+            emotion_result["valence"], 
+            emotion_result["arousal"], 
+            emotion_result["cluster_id"]
+        )
+        
+        # Return results
+        result = {
+            "video_id": video_id,
+            "valence": emotion_result["valence"],
+            "arousal": emotion_result["arousal"],
+            "cluster_id": emotion_result["cluster_id"],
+            "song": song_recommendation
+        }
+        
+        return jsonify(result)
             
     except Exception as e:
         return jsonify({'error': f'Processing failed: {str(e)}'}), 500
@@ -108,7 +126,7 @@ def get_song(song_id):
     Serve audio file for a given song ID
     """
     try:
-        audio_path = Path(f"data/deam/MEMD_audio/{song_id}.mp3")
+        audio_path = Path(f"../data/deam/MEMD_audio/{song_id}.mp3")
         if audio_path.exists():
             return send_file(str(audio_path), as_attachment=False)
         else:

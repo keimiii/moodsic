@@ -3,7 +3,8 @@ import axios from 'axios';
 import './index.css';
 
 function App() {
-  const [videoFile, setVideoFile] = useState(null);
+  const [videos, setVideos] = useState([]);
+  const [selectedVideo, setSelectedVideo] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [emotionData, setEmotionData] = useState(null);
@@ -16,9 +17,10 @@ function App() {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
 
-  // Load clusters on component mount
+  // Load clusters and videos on component mount
   useEffect(() => {
     loadClusters();
+    loadVideos();
   }, []);
 
   // Load clusters from backend
@@ -31,28 +33,34 @@ function App() {
     }
   };
 
-  // Handle video file selection
-  const handleVideoUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
+  // Load videos from backend
+  const loadVideos = async () => {
+    try {
+      const response = await axios.get('/api/videos');
+      setVideos(response.data);
+    } catch (error) {
+      console.error('Error loading videos:', error);
     }
+  };
+
+  // Handle video selection
+  const handleVideoSelect = (video) => {
+    setSelectedVideo(video);
+    setVideoUrl(`/api/video/${video.id}`);
+    setEmotionData(null); // Reset emotion data when selecting new video
   };
 
   // Process video for emotion analysis
   const processVideo = async () => {
-    if (!videoFile) return;
+    if (!selectedVideo) return;
 
     setIsProcessing(true);
     try {
-      const formData = new FormData();
-      formData.append('video', videoFile);
-
-      const response = await axios.post('/api/process-video', formData, {
+      const response = await axios.post('/api/process-video', {
+        video_id: selectedVideo.id
+      }, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
       });
 
@@ -208,19 +216,24 @@ function App() {
         </div>
         
         <div className="controls">
-          <input
-            type="file"
-            id="video-upload"
-            accept="video/*"
-            onChange={handleVideoUpload}
-            className="file-input"
-          />
-          <label htmlFor="video-upload" className="file-input-label">
-            Upload Video
-          </label>
+          <div className="video-selection">
+            <h3>Select Video:</h3>
+            <div className="video-options">
+              {videos.map((video) => (
+                <button
+                  key={video.id}
+                  className={`video-option ${selectedVideo?.id === video.id ? 'selected' : ''}`}
+                  onClick={() => handleVideoSelect(video)}
+                >
+                  {video.name}
+                </button>
+              ))}
+            </div>
+          </div>
           <button 
             onClick={processVideo} 
-            disabled={!videoFile || isProcessing}
+            disabled={!selectedVideo || isProcessing}
+            className="analyze-button"
           >
             {isProcessing ? 'Processing...' : 'Analyze'}
           </button>
@@ -238,7 +251,7 @@ function App() {
               />
             ) : (
               <div className="video-placeholder">
-                <span>Upload a video to analyze</span>
+                <span>Select a video to analyze</span>
               </div>
             )}
           </div>
@@ -269,7 +282,7 @@ function App() {
             <div className="video-description">
               {emotionData 
                 ? `Analysis complete. Valence: ${emotionData.valence.toFixed(2)}, Arousal: ${emotionData.arousal.toFixed(2)}`
-                : 'Upload a video to analyze emotions and get music recommendations.'
+                : 'Select a video to analyze emotions and get music recommendations.'
               }
             </div>
           </div>
