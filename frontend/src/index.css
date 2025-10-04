@@ -188,37 +188,43 @@ button:disabled {
   text-align: center;
 }
 
-.video-options {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.video-option {
+.video-dropdown {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
+  font-size: 1rem;
   cursor: pointer;
-  font-size: 0.9rem;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
-  min-width: 80px;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  display: block;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1rem;
+  padding-right: 3rem;
 }
 
-.video-option:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+.video-dropdown:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.video-option.selected {
-  background: rgba(102, 126, 234, 0.3);
+.video-dropdown:focus {
+  outline: none;
   border-color: rgba(102, 126, 234, 0.5);
-  box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.video-dropdown option {
+  background: #1a1a2e;
+  color: white;
+  padding: 0.5rem;
 }
 
 .analyze-button {

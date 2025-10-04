@@ -164,26 +164,55 @@ function App() {
         ctx.stroke();
       }
 
-      // Draw clusters
+      // Draw clusters, for each cluster, draw its points with different colours
+      const cluster_colours = [
+        '255, 99, 132',   // Red
+        '54, 162, 235',   // Blue
+        '255, 206, 86',   // Yellow
+        '75, 192, 192',   // Teal
+        '153, 102, 255',  // Purple
+      ];
       clusters.forEach((cluster, clusterIndex) => {
         const centerX = ((cluster.center.valence + 1) / 2) * canvas.width;
         const centerY = ((1 - cluster.center.arousal) / 2) * canvas.height;
         
-        // Draw cluster points
+        // Draw all points in the cluster
+        if (cluster.points && cluster.points.length > 0) {
+          cluster.points.forEach(point => {
+            const pointX = ((point.valence + 1) / 2) * canvas.width;
+            const pointY = ((1 - point.arousal) / 2) * canvas.height;
+            
+            const isActive = emotionData && emotionData.cluster_id === cluster.id;
+            const alpha = isActive ? 0.6 : 0.05;
+            const clusterColour = cluster_colours[clusterIndex % cluster_colours.length];
+            
+            // Draw each point
+            ctx.fillStyle = `rgba(${clusterColour}, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(pointX, pointY, 2, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // Draw animated cluster boundary
+        ctx.strokeStyle = emotionData && emotionData.cluster_id === cluster.id 
+          ? 'rgba(102, 126, 234, 0.4)'
+          : 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
         for (let i = 0; i < 50; i++) {
           const angle = (Math.PI * 2 * i) / 50;
           const radius = 20 + Math.sin(Date.now() * 0.001 + angle) * 5;
           const x = centerX + Math.cos(angle) * radius;
           const y = centerY + Math.sin(angle) * radius;
           
-          const isActive = emotionData && emotionData.cluster_id === cluster.id;
-          const alpha = isActive ? 0.8 : 0.2;
-          
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.beginPath();
-          ctx.arc(x, y, 2, 0, Math.PI * 2);
-          ctx.fill();
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
         }
+        ctx.closePath();
+        ctx.stroke();
 
         // Draw cluster center
         if (emotionData && emotionData.cluster_id === cluster.id) {
@@ -218,17 +247,21 @@ function App() {
         <div className="controls">
           <div className="video-selection">
             <h3>Select Video:</h3>
-            <div className="video-options">
+            <select 
+              value={selectedVideo?.id || ''} 
+              onChange={(e) => {
+                const video = videos.find(v => v.id === e.target.value);
+                if (video) handleVideoSelect(video);
+              }}
+              className="video-dropdown"
+            >
+              <option value="">Choose a video...</option>
               {videos.map((video) => (
-                <button
-                  key={video.id}
-                  className={`video-option ${selectedVideo?.id === video.id ? 'selected' : ''}`}
-                  onClick={() => handleVideoSelect(video)}
-                >
+                <option key={video.id} value={video.id}>
                   {video.name}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
           <button 
             onClick={processVideo} 
