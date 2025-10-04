@@ -1,13 +1,11 @@
-import os
-import json
-import numpy as np
-import joblib
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import cv2
-import tempfile
 from pathlib import Path
 import polars as pl
+
+from helpers.process_video import process_video_for_emotion
+from helpers.song_recommendation import recommend_song
+from constants import CLUSTERS_CSV_PATH, CLUSTER_METADATA
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -17,76 +15,10 @@ CORS(app)
 # In a real implementation, you would load the trained models here
 scaler, gmm, songs_df = None, None, None
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-CLUSTERS_CSV_PATH = BASE_DIR / "notebooks/deam/artifacts/deam_gmm/deam_with_clusters.csv"
-CLUSTER_METADATA = {
-    0: {
-        "name": "Cluster 0 - High Valence, High Arousal",
-        "mood": "Party-starting joy, confetti energy.",
-        "traits": ["fast tempo", "big drops", "bright majors", "loud and punchy"],
-    },
-    1: {
-        "name": "Cluster 1 - Low Valence, Low Arousal",
-        "mood": "Rainy-window melancholy and gentle sighs.",
-        "traits": ["slow tempo", "minor keys", "sparse textures", "soft dynamics"],
-    },
-    2: {
-        "name": "Cluster 2 - Moderately High Valence, Moderate Arousal",
-        "mood": "Feel-good groove, smiles without the sweat.",
-        "traits": ["steady beat", "warm chords", "catchy hooks", "relaxed lift"],
-    },
-    3: {
-        "name": "Cluster 3 - Slightly Negative Valence, Neutral Arousal",
-        "mood": "Moody focus with a thoughtful edge.",
-        "traits": ["modal or minor", "mid tempo", "restrained energy", "atmospheric layers"],
-    },
-    4: {
-        "name": "Cluster 4 - Slightly Positive Valence, Low Arousal",
-        "mood": "Sunny chill and hammock vibes.",
-        "traits": ["slow-mid tempo", "soft drums", "warm harmonies", "relaxed feel"],
-    },
-}
-
-def process_video_for_emotion(video_id):
-    """
-    Process video to extract emotion features
-    This is a placeholder - in a real implementation, you would:
-    1. Load video from data/VEATIC/videos/{video_id}.mp4
-    2. Extract frames from video
-    3. Run face detection and emotion recognition
-    4. Run scene analysis
-    5. Fuse the results
-    """
-    # For now, return different static values based on video_id
-    # In a real implementation, this would use your trained models
-    video_scenes = {
-        "4": {"valence": 0.37, "arousal": 0.34, "cluster_id": 0},
-        "44": {"valence": -0.33, "arousal": -0.44, "cluster_id": 1},
-        "60": {"valence": 0.14, "arousal": 0.16, "cluster_id": 2}
-    }
-    
-    # Return the scene for the specific video
-    return video_scenes.get(video_id, {"valence": 0.0, "arousal": 0.0, "cluster_id": 0})
-
-def recommend_song(valence, arousal, cluster_id):
-    """
-    Recommend a song based on valence, arousal, and cluster
-    """
-    # Use static mock data for now
-    mock_songs = [
-        {"song_id": "10", "title": "Sunlit Avenues", "artist": "Ivory Coast", "genre": "electronic"},
-        {"song_id": "1000", "title": "Gravity Rush", "artist": "Midnight Circuit", "genre": "rock"},
-        {"song_id": "1001", "title": "Midnight Drizzle", "artist": "Slow Parade", "genre": "folk/country"},
-        {"song_id": "1002", "title": "Caps & Gowns", "artist": "Riverfolk", "genre": "pop"},
-        {"song_id": "1003", "title": "Full Court Press", "artist": "Baseline", "genre": "hip-hop"},
-        {"song_id": "1004", "title": "Couch Screams", "artist": "Neon Noir", "genre": "electronic"}
-    ]
-    return mock_songs[cluster_id % len(mock_songs)]
-
 @app.route('/api/videos')
 def get_videos():
     """
-    Get list of available videos
+    Get list of available videos. We can add any additional videos here.
     """
     videos = [
         {"id": "4", "name": "Video 4", "filename": "4.mp4"},
