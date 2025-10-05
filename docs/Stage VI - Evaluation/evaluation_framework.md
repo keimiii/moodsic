@@ -1,10 +1,10 @@
-## Preflight Checklist
+# VEATIC Evaluation Framework
+
+## Checklist
 - [x] Ground-truth VEATIC label CSVs available under `data/VEATIC/rating_averaged/` (loaded on the fly; no regeneration step needed).
 - [x] Stabilized and unstabilized inference exports generated via `notebooks/Inference/batch_video_fusion_export.ipynb` with matching video sets.
 - [ ] Aggregation script/notebook implemented to compute MAE, coverage, and stabilization deltas per this framework.
 - [ ] Reporting template established in `results/evaluation/` (tables/plots + summary write-up).
-
-# VEATIC Evaluation Framework
 
 ## Purpose
 This document defines how we evaluate the PERCEIVE → STABILIZE stack on VEATIC videos.
