@@ -47,4 +47,4 @@ Quick shortcuts for common tasks:
 - **Imports**: Standard library first, then third-party (streamlit, cv2, numpy, etc.)
 - **Naming**: snake_case for variables/functions, PascalCase for classes (VideoTransformer)
 - **Style**: Clean, readable code with good spacing and comments
-- **Implementation Notes**: After every code change, add a brief trailing comment summarizing whether the solution is over-engineered given the academic, time-boxed POC scope, noting any simpler viable alternatives or failures.
+- **Implementation Notes**: After every code change, report in chat whether the solution feels over-engineered for the academic, time-boxed POC scope, including any simpler alternatives or noted gaps. Keep this as a conversational summary rather than an inline code comment.
