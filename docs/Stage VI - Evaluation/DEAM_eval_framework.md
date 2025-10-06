@@ -47,10 +47,9 @@ inference from exploratory work.
   `JSON` + `npz` pair works: `clusters_meta.json` with quadrant labels and
   scaling info, `clusters_params.npz` with arrays.
 - **Storage location:** Create `results/clustering/deam_gmm_<timestamp>/` (or a
-  similar versioned directory) containing the artifacts plus a `README.md`
-  summarizing training data, preprocessing, and the mapping logic. Keep the
-  latest symlink (e.g., `results/clustering/deam_gmm_latest`) for ease of
-  consumption.
+  similar versioned directory) and drop the artifacts there alongside the
+  serialized metadata. Keep an optional pointer (for example,
+  `results/clustering/deam_gmm_latest`) only if it helps wiring.
 - **Loading helper:** Add a small utility (e.g.,
   `utils/deam_clusters.py`) that loads the artifacts and exposes an object with
   `predict_proba(valence, arousal)` and `quadrant_for_component(idx)` methods.
@@ -127,17 +126,18 @@ be trended across experiments.
   training logic and quadrant mapping experiments.
 - `scripts/evaluation/aggregate_veatic_metrics.py` — Reference implementation of
   a timestamped evaluation pipeline (structure and output conventions).
+- `docs/Stage IV — Inference/retrieval-dwell-and-variety.md` — Runtime gating,
+  dwell, and de-duplication policy the evaluator mirrors.
 
 ## Open Questions / Next Steps
 
-- Decide whether quadrants should treat near-axis predictions as “neutral” and
-  allow a dedicated fifth quadrant label. If yes, update both the cluster
-  metadata and evaluator to stay consistent.
-- Clarify how station gating (top-1 vs. top-2 expansion) impacts accuracy
-  computation—should the evaluator simulate gating or score only the final
-  cluster? Make this choice explicit in the README.
-- Determine retention policy for historical bundles: keep all versions, or
-  archive after major refits to prevent clutter?
+- Lock in four quadrants only; near-axis predictions should fall back to the
+  standard sign-based quadrant so we avoid introducing a neutral label.
+- Mirror the production station gating when scoring accuracy: run the same
+  top-1 / top-2 gating logic, identify the cluster tied to the recommended
+  song, and log the gating parameters in the run metadata.
+- Drop historical GMM bundles once a newer export is adopted; no archival
+  backlog needed for this POC.
 
 With these components in place, the DEAM evaluation becomes reproducible and
 auditable, closing the loop between emotion prediction quality and music
