@@ -163,6 +163,24 @@ The script will:
 - Emotion detection interface
 - Fast parallel dataset downloading (25,623 images)
 
+## Linking Fused Valence/Arousal to DEAM Clusters
+
+Use the exported bundle plus ``scripts/clustering/deam_clusters.py`` to convert
+pipeline predictions into DEAM station assignments:
+
+```bash
+python scripts/clustering/deam_clusters.py \
+    --bundle-dir results/clustering/deam_gmm_20251006_151857 \
+    --parquet results/inference/pipeline_results_20251006_144126.parquet \
+    --output results/inference/pipeline_results_20251006_144126_clusters.parquet
+```
+
+The script appends ``deam_component``, ``deam_quadrant``, and per-component
+posterior columns so evaluators can reuse the gating logic without loading the
+original scikit-learn model. Programmatic access is also available via
+``annotate_parquet_with_clusters`` if you prefer to call it from notebooks or
+tests.
+
 ## Testing
 
 See Testing.md for full details. Quick start:

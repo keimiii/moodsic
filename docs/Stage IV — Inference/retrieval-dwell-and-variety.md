@@ -19,9 +19,9 @@ Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/
 
 The GMM gate is more than a list of centroids: it was fit on the DEAM songs
 after standardizing valence/arousal with the learned `StandardScaler`. Each
-component therefore carries a mean, a full covariance matrix, and a mixing
-weight in that standardized space. Feeding a fused V/A directly into
-`predict_proba` first runs the same scaling transform, then evaluates
+component therefore carries a mean, diagonal covariance (variance per axis),
+and a mixing weight in that standardized space. Feeding a fused V/A directly
+into `predict_proba` first runs the same scaling transform, then evaluates
 Mahalanobis distance under every component and blends the result with the
 component priors. The returned posteriors behave like confidence scores, which
 we use to decide whether to stick with the top cluster or widen to the top two.

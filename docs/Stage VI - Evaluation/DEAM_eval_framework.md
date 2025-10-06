@@ -2,7 +2,7 @@
 
 ## Checklist
 - [x] Export the five-component DEAM GMM (means, covariances, priors, quadrant labels) into a versioned bundle under `results/clustering/` with provenance metadata.
-- [ ] Implement `utils/deam_clusters.py` (or equivalent) to load the bundle and expose `predict_proba` plus quadrant lookup helpers for inference and evaluation.
+- [x] Implement `scripts/clustering/deam_clusters.py` to annotate inference Parquet exports with DEAM posteriors, components, and quadrants.
 - [ ] Ship `scripts/evaluation/evaluate_deam_quadrants.py` to score pipeline Parquet exports and emit `deam_quadrant_accuracy_<timestamp>` artifacts.
 - [ ] Document each evaluator run (timestamp, input Parquet, tolerance settings) alongside VEATIC results in `docs/Stage VI - Evaluation/` to keep reporting consistent.
 
@@ -90,13 +90,15 @@ be trended across experiments.
    and arousal after applying any tolerance band (e.g., treat values within
    ±0.05 of zero as neutral and fall back to highest absolute axis). Persist the
    tolerance in the evaluator’s config so comparisons stay consistent.
-3. **Cluster lookup:** Use the loading helper to obtain the highest-probability
-   cluster (or follow the production selection logic if different). Fetch the
-   cluster’s quadrant label from metadata.
+3. **Cluster lookup:** Run `scripts/clustering/deam_clusters.py` (or import
+   `annotate_parquet_with_clusters`) to append the top component, full posterior
+   vector, and quadrant label to the Parquet. Downstream steps can then operate
+   directly on the enriched columns.
 4. **Scoring:** Emit `1` if the quadrants match, else `0`. Capture the raw
    predictions, cluster id, and quadrant labels to support debugging.
 5. **Aggregation:** Compute overall accuracy and optionally per-quadrant
-   precision/recall to surface imbalances. Write a CSV to
+   precision/recall using the appended posterior columns (e.g., reuse the
+   0.55 top-two-gating threshold when interpreting scores). Write a CSV to
    `results/evaluation/deam_quadrant_accuracy_<timestamp>.csv` plus a JSON of run
    parameters mirroring the VEATIC documentation style.
 6. **Reporting:** Update `docs/Stage VI - Evaluation/` summaries with the new
