@@ -172,3 +172,31 @@ source .venv/bin/activate.fish
 uv pip install pytest opencv-python-headless
 pytest -q
 ```
+
+## VEATIC Round I Evaluation
+
+The Round I report at `docs/Stage VI - Evaluation/eval_res_round_i.md` comes from a single VEATIC inference sweep plus an aggregation pass. Re-run the steps below to regenerate every artifact referenced in that summary.
+
+1. **Activate the project environment.**
+   ```bash
+   source .venv/bin/activate.fish
+   uv pip install -r requirements_inference.txt
+   ```
+2. **Stage evaluation assets.** Make sure the VEATIC videos sit under `data/VEATIC/videos`, the averaged label CSVs under `data/VEATIC/rating_averaged/`, the scene checkpoint at `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`, and EmoNet weights under `models/emonet/pretrained/`.
+3. **Export fused predictions (stabilized + raw).** Defaults already match the Round I notebook configuration, so run:
+   ```bash
+   python scripts/evaluation/run_inference_pipeline.py \
+       --video-dir data/VEATIC/videos \
+       --output-root results/inference \
+       --stabilizer-mode both
+   ```
+   This writes `results/inference/pipeline_results_<timestamp>.parquet` plus per-video JSON payloads for both stabilizer settings.
+4. **Aggregate metrics for the report.** Point the aggregator at the Parquet summary from the previous step:
+   ```bash
+   python scripts/evaluation/aggregate_veatic_metrics.py \
+       results/inference/pipeline_results_<timestamp>.parquet
+   ```
+   Outputs land in `results/evaluation/` (per-video CSV, aggregate CSV, and run-parameter JSON sharing the same timestamp).
+5. **Update the markdown.** Rerun analysis or regenerate tables using the CSVs above, then refresh `docs/Stage VI - Evaluation/eval_res_round_i.md` with the new metrics if values change.
+
+The defaults already toggle variance-weighted fusion (`SCENE_WEIGHT=0.6`/`FACE_WEIGHT=0.4`), run three MC-dropout passes per pathway, and execute both stabilizer modes in one command, so no additional flags are required unless you are exploring alternative weightings.
