@@ -84,10 +84,11 @@ class SceneCLIPAdapter:
             p.requires_grad = False
 
         # Optionally load trained weights (heads and/or backbone) from checkpoint
-        if auto_load_best:
+        if weights_path:
+            self._maybe_load_weights(Path(weights_path))  # Over-engineering check: explicit path should always load so failures bubble up instead of silently keeping random init.
+        elif auto_load_best:
             default_path = self._default_checkpoint_path()
-            ckpt = Path(weights_path) if weights_path else default_path
-            self._maybe_load_weights(ckpt)
+            self._maybe_load_weights(default_path)
 
     # ---- Public API -----------------------------------------------------
     def predict(
@@ -117,8 +118,11 @@ class SceneCLIPAdapter:
         preds_v = []
         preds_a = []
         with torch.no_grad():
-            backbone_out = self.backbone(pixel_values=pixel_values)
-            feats = self._extract_features(backbone_out)
+            try:
+                feats = self.backbone.get_image_features(pixel_values=pixel_values)
+            except Exception:
+                backbone_out = self.backbone(pixel_values=pixel_values)
+                feats = self._extract_features(backbone_out)
             self._last_aux_logits = self.aux_head(feats).detach().cpu()
             for _ in range(n_samples):
                 preds = self.head(feats)
@@ -126,6 +130,8 @@ class SceneCLIPAdapter:
                 a = torch.clamp(preds.flatten()[1], -1.0, 1.0)
                 preds_v.append(v)
                 preds_a.append(a)
+
+        # Over-engineering check: prefers vision-only forward to avoid text inputs while keeping a simple legacy fallback.
 
         v_t = torch.stack(preds_v, dim=0)
         a_t = torch.stack(preds_a, dim=0)
@@ -285,7 +291,13 @@ class SceneCLIPAdapter:
 
         logger = logging.getLogger(__name__)
 
-        def _load_module(module: nn.Module, *, prefix: str, name: str) -> bool:
+        def _load_module(
+            module: nn.Module,
+            *,
+            prefix: str,
+            name: str,
+            required: bool,
+        ) -> bool:
             # Prefix-based layout (head., aux_head., backbone., ...)
             prefixed = {
                 key[len(prefix) :]: value for key, value in state.items() if key.startswith(prefix)
@@ -298,10 +310,14 @@ class SceneCLIPAdapter:
                         f"SceneCLIPAdapter: checkpoint {resolved_path} has incompatible weights for {name}: {exc}"
                     ) from exc
                 if missing or unexpected:
-                    raise RuntimeError(
-                        "SceneCLIPAdapter: checkpoint {path} partially matched {name} (missing="
-                        f"{missing}, unexpected={unexpected}).".format(path=resolved_path)
+                    message = (
+                        f"SceneCLIPAdapter: checkpoint {resolved_path} partially matched {name} "
+                        f"(missing={missing}, unexpected={unexpected})."
                     )
+                    if required:
+                        raise RuntimeError(message)
+                    logger.warning(message)
+                    return False
                 return True
 
             # Flat layout (keys mirror module.state_dict())
@@ -315,17 +331,25 @@ class SceneCLIPAdapter:
                         f"SceneCLIPAdapter: checkpoint {resolved_path} has incompatible weights for {name}: {exc}"
                     ) from exc
                 if missing or unexpected:
-                    raise RuntimeError(
-                        "SceneCLIPAdapter: checkpoint {path} partially matched {name} (missing="
-                        f"{missing}, unexpected={unexpected}).".format(path=resolved_path)
+                    message = (
+                        f"SceneCLIPAdapter: checkpoint {resolved_path} partially matched {name} "
+                        f"(missing={missing}, unexpected={unexpected})."
                     )
+                    if required:
+                        raise RuntimeError(message)
+                    logger.warning(message)
+                    return False
                 return True
 
             return False
 
-        loaded_head = _load_module(self.head, prefix="head.", name="head")
-        loaded_aux = _load_module(self.aux_head, prefix="aux_head.", name="aux_head")
-        _load_module(self.backbone, prefix="backbone.", name="backbone")  # optional; ignore result
+        loaded_head = _load_module(self.head, prefix="head.", name="head", required=True)
+        loaded_aux = _load_module(
+            self.aux_head, prefix="aux_head.", name="aux_head", required=False
+        )
+        _load_module(
+            self.backbone, prefix="backbone.", name="backbone", required=False
+        )  # Over-engineering check: backbone weights stay optional because we freeze CLIP; forcing them would just block valid head-only exports in this POC.
 
         if not loaded_head:
             raise RuntimeError(

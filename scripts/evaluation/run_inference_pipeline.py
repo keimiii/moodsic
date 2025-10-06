@@ -271,7 +271,7 @@ def load_adapters(
         )
         print("SceneCLIPAdapter: OK")
     except Exception as exc:
-        print(f"SceneCLIPAdapter unavailable: {exc}")
+        raise RuntimeError(f"SceneCLIPAdapter unavailable: {exc}") from exc  # Over-engineering check: failing fast is simplest; optional fallbacks would add unnecessary branching for this POC.
 
     try:
         from utils.emonet_single_face_processor import EmoNetSingleFaceProcessor  # type: ignore
