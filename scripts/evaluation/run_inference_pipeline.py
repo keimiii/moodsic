@@ -56,12 +56,13 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 try:  # Align with notebook guard that registers fastai learner for torch
     import torch.serialization
     from fastai.learner import Learner  # type: ignore
+    from fastai.data.core import DataLoaders  # type: ignore
 except Exception as exc:  # pragma: no cover - informative failure path
     raise RuntimeError(
         "fastai and torch must be importable before running the export script"
     ) from exc
 else:  # pragma: no cover - harmless registration side-effect
-    torch.serialization.add_safe_globals([Learner])
+    torch.serialization.add_safe_globals([Learner, DataLoaders])  # Over-engineering check: single registration keeps pickle loads simple for both CLI and notebooks.
 
 
 @dataclass
@@ -70,6 +71,7 @@ class ExportConfig:
     video_dir: Path
     output_root: Path
     video_extensions: Tuple[str, ...]
+    video_limit: Optional[int]
     scene_tta: int
     face_tta: int
     target_sample_fps: float
@@ -94,7 +96,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     arguments for parameter sweeps—for example, ``--scene-weight 0.5`` to try a
     balanced fusion prior or ``--stabilizer-mode off`` to skip the EMA pass.
     """
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]  # Over-engineering check: direct parent climb keeps defaults simple; packaging the repo would be heavier than needed.
     parser = argparse.ArgumentParser(
         description="Batch export fused valence/arousal JSON payloads from videos.",
     )
@@ -200,7 +202,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=None,
         help="Optional override for adapter weight paths (defaults to repo layout).",
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--n",
+        type=int,
+        default=None,
+        help="Limit processing to the first N videos (sorted) for faster debugging.",
+    )
+    parsed = parser.parse_args(argv)
+    if parsed.n is not None and parsed.n <= 0:
+        parser.error("--n must be a positive integer")
+    return parsed
 
 
 def _ensure_repo_path(path: Path, repo_root: Path) -> Path:
@@ -249,7 +260,7 @@ def load_adapters(
         from models.scene.clip_vit_scene_adapter import SceneCLIPAdapter  # type: ignore
 
         weights_dir = weights_root or repo_root
-        scene_weights = weights_dir / "scene" / "checkpoints" / "clip_vit-b32_improved_head.pth"
+        scene_weights = weights_dir / "scene" / "checkpoints" / "clip_vit-b32_improved_fixed.pkl"  # Over-engineering check: force learner pickle to avoid silent fallback paths.
         scene_adapter = SceneCLIPAdapter(
             model_name="openai/clip-vit-base-patch32",
             dropout_rate=0.3,
@@ -459,6 +470,8 @@ def export_batch(
     from utils.runtime_driver import perceive_video  # Local import to trim startup
 
     videos = list_videos(config.video_dir, config.video_extensions)
+    if config.video_limit is not None and config.video_limit > 0:
+        videos = videos[: config.video_limit]  # Over-engineering check: simple slice gives us fast PoC iterations without bespoke samplers.
     label = "stabilized" if enable_stabilizer else "unstabilized"
 
     if not videos:
@@ -516,7 +529,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     start_time = time.perf_counter()
     args = parse_args(argv)
 
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]  # Over-engineering check: explicit repo root ensures imports work without requiring install; adding a helper would be marginal gain.
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
@@ -546,6 +559,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         video_dir=video_dir,
         output_root=output_root,
         video_extensions=video_extensions,
+        video_limit=args.n,
         scene_tta=args.scene_tta,
         face_tta=args.face_tta,
         target_sample_fps=args.target_sample_fps,
@@ -595,6 +609,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "scene_weight": args.scene_weight,
         "face_weight": args.face_weight,
         "use_variance_weighting": not args.no_variance_weighting,
+        "video_limit": args.n,
         "stabilizer_mode": args.stabilizer_mode,
         "scene_tta": args.scene_tta,
         "face_tta": args.face_tta,
@@ -617,4 +632,4 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-# Over-engineering check: CLI ports notebook behavior with minimal extras (arg parsing, logging); no simpler viable alternative without losing flexibility.
+# Over-engineering check: CLI mirrors notebook with lean tweaks; explicit parent climb avoids packaging overhead while keeping flexibility intact.
