@@ -1,7 +1,7 @@
 # DEAM Quadrant Evaluation Framework
 
 ## Checklist
-- [ ] Export the five-component DEAM GMM (means, covariances, priors, quadrant labels) into a versioned bundle under `results/clustering/` with provenance metadata.
+- [x] Export the five-component DEAM GMM (means, covariances, priors, quadrant labels) into a versioned bundle under `results/clustering/` with provenance metadata.
 - [ ] Implement `utils/deam_clusters.py` (or equivalent) to load the bundle and expose `predict_proba` plus quadrant lookup helpers for inference and evaluation.
 - [ ] Ship `scripts/evaluation/evaluate_deam_quadrants.py` to score pipeline Parquet exports and emit `deam_quadrant_accuracy_<timestamp>` artifacts.
 - [ ] Document each evaluator run (timestamp, input Parquet, tolerance settings) alongside VEATIC results in `docs/Stage VI - Evaluation/` to keep reporting consistent.

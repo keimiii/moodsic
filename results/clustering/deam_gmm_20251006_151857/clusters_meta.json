@@ -1,0 +1,107 @@
+{
+  "artifacts": {
+    "metadata": "clusters_meta.json",
+    "params": "clusters_params.npz"
+  },
+  "bundle_dir": "results/clustering/deam_gmm_20251006_151857",
+  "components": [
+    {
+      "component": 0,
+      "mean_ref": {
+        "arousal": 0.33487834161344315,
+        "valence": 0.36728180454557147
+      },
+      "mean_scaled": {
+        "arousal": 1.1900820585391696,
+        "valence": 1.3331317820217374
+      },
+      "quadrant": "q1_happy",
+      "weight": 0.15340823339226223
+    },
+    {
+      "component": 1,
+      "mean_ref": {
+        "arousal": -0.4344253440050745,
+        "valence": -0.30906519860850756
+      },
+      "mean_scaled": {
+        "arousal": -1.210557234863819,
+        "valence": -0.9714564800299816
+      },
+      "quadrant": "q3_sad",
+      "weight": 0.22148982902981862
+    },
+    {
+      "component": 2,
+      "mean_ref": {
+        "arousal": 0.14177387027199445,
+        "valence": 0.11305301201434836
+      },
+      "mean_scaled": {
+        "arousal": 0.587492742641923,
+        "valence": 0.46687128495324387
+      },
+      "quadrant": "q1_happy",
+      "weight": 0.2710345649242192
+    },
+    {
+      "component": 3,
+      "mean_ref": {
+        "arousal": -0.006197592815009624,
+        "valence": -0.20184810737782716
+      },
+      "mean_scaled": {
+        "arousal": 0.12574257137712366,
+        "valence": -0.6061244111522189
+      },
+      "quadrant": "q3_sad",
+      "weight": 0.1960498300250546
+    },
+    {
+      "component": 4,
+      "mean_ref": {
+        "arousal": -0.24225568029379657,
+        "valence": 0.006954989390053373
+      },
+      "mean_scaled": {
+        "arousal": -0.6108850191582301,
+        "valence": 0.10535233620860743
+      },
+      "quadrant": "q4_calm",
+      "weight": 0.1580175426286454
+    }
+  ],
+  "created_at": "2025-10-06T15:18:57.726367+00:00",
+  "gmm": {
+    "converged": true,
+    "covariance_type": "diag",
+    "n_components": 5,
+    "n_iter": 8,
+    "tol": 0.001
+  },
+  "provenance": {
+    "export_script": "export_deam_gmm.py",
+    "git_commit": "07a755cdaaf59456d6e76c8dc078410b6c5d4015",
+    "source_dir": "/Users/desmondchoy/Projects/emo-rec/notebooks/Dataset - DEAM/artifacts/deam_gmm"
+  },
+  "reference_space": {
+    "arousal": [
+      -1.0,
+      1.0
+    ],
+    "valence": [
+      -1.0,
+      1.0
+    ]
+  },
+  "scaler": {
+    "mean": [
+      -0.023963651498335185,
+      -0.04649278579356271
+    ],
+    "scale": [
+      0.2934784552586169,
+      0.3204578412644422
+    ]
+  }
+}
