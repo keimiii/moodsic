@@ -120,3 +120,12 @@ This is a proof-of-concept implementation using static data:
 - The application currently uses mock data for demonstration purposes
 - Audio files are served from `data/deam/MEMD_audio/` directory
 - The cluster visualization is based on the design from `docs/Stage V — App/index.html`
+
+
+Todos:
+- [x] Fetch results from parquet
+- [ ] Pick top 10 songs
+- [ ] Play music with video
+- [ ] Analysis (face, scenes, fusion - see which one is used!)
+- [ ] Display both clusters (GMM and HDBSCAN, can toggle)
+

@@ -1,14 +1,33 @@
-def recommend_song(valence, arousal, cluster_id):
-    """
-    Recommend a song based on valence, arousal, and cluster
-    """
-    # Use static mock data for now
-    mock_songs = [
-        {"song_id": "10", "title": "Sunlit Avenues", "artist": "Ivory Coast", "genre": "electronic"},
-        {"song_id": "1000", "title": "Gravity Rush", "artist": "Midnight Circuit", "genre": "rock"},
-        {"song_id": "1001", "title": "Midnight Drizzle", "artist": "Slow Parade", "genre": "folk/country"},
-        {"song_id": "1002", "title": "Caps & Gowns", "artist": "Riverfolk", "genre": "pop"},
-        {"song_id": "1003", "title": "Full Court Press", "artist": "Baseline", "genre": "hip-hop"},
-        {"song_id": "1004", "title": "Couch Screams", "artist": "Neon Noir", "genre": "electronic"}
-    ]
-    return mock_songs[cluster_id % len(mock_songs)]
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict
+
+from .process_video import _pick_song
+
+LOGGER = logging.getLogger(__name__)
+
+
+def recommend_song(valence: float, arousal: float, cluster_id: int) -> Dict[str, Any]:
+    """Recommend the closest DEAM track for the provided emotion estimate."""
+
+    try:
+        song = _pick_song(int(cluster_id), float(valence), float(arousal))
+    except Exception as exc:  # pragma: no cover - defensive fallback only
+        LOGGER.warning("Falling back to empty recommendation: %s", exc)
+        song = {}
+
+    if not song:
+        return {}
+
+    return {
+        "song_id": str(song.get("song_id")),
+        "title": song.get("song_title"),
+        "artist": song.get("artist"),
+        "genre": song.get("genre"),
+        "cluster": int(song.get("cluster", cluster_id)),
+        "cluster_conf": song.get("cluster_conf"),
+        "valence_ref": song.get("valence_ref"),
+        "arousal_ref": song.get("arousal_ref"),
+        "distance": song.get("distance"),
+    }

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CLUSTERS_CSV_PATH = BASE_DIR / "notebooks/deam/artifacts/deam_gmm/deam_with_clusters.csv"
+CLUSTERS_CSV_PATH = BASE_DIR / "notebooks/Dataset - DEAM/artifacts/deam_gmm/deam_with_clusters.csv"
 CLUSTER_METADATA = {
     0: {
         "name": "Cluster 0 - High Valence, High Arousal",
