@@ -1,5 +1,39 @@
 # DEAM Quadrant Evaluation Framework
 
+## Status — Under Consideration
+
+We are re-evaluating the quadrant-matching plan before investing further implementation effort because:
+- The proposed metric compares the fused valence/arousal pair to the quadrant baked into the same GMM bundle, so it largely becomes a wiring sanity check rather than an independent validation of personalization quality.
+- Unlike the VEATIC framework (`docs/Stage VI - Evaluation/VEATIC_eval_framework.md`), this approach does not benchmark against a held-out, human-labeled dataset; it therefore cannot demonstrate generalization in the way our professors expect for rigorous evaluation.
+- It offers limited insight into whether the recommended songs truly reflect the user’s affect—posterior gaps or centroid distances stay unreported, and no external evidence corroborates the match.
+- The script would still be useful as a smoke test for bundle drift or scale mismatches, but that benefit may not justify the build cost for a POC unless paired with richer storytelling.
+
+For progress tracking we are keeping the original workflow below, but it should be treated as a reference draft until we decide whether to proceed.
+
+## Alternative Direction — Explainable Stations (XAI Focus)
+
+The explainability-first path repurposes the same DEAM assets to produce transparent, human-friendly station narratives—an angle that scores well in an academic POC because it demonstrates user-centred AI and interpretability.
+
+### What We Can Deliver
+- **Station profile cards:** Aggregate each cluster’s centroid, valence/arousal ranges, dominant genres, and top-confidence exemplar tracks. Persist these summaries alongside the GMM bundle so the app can display “You landed in *Sunlit Rush*: upbeat rock & chiptune (avg VA ≈ +0.40/+0.36).”
+- **Why-this-song blurbs:** When recommending a track, surface the user’s fused VA, the station persona, and a few supporting metadata tags (tempo adjectives, instrumentation, last.fm labels) drawn from `data/DEAM/metadata_2014.csv` and related files.
+- **Confidence storytelling:** Expose posterior margins and the runner-up station with its persona, making the recommendation rationale auditable (“Brooding Focus trailed by 9 %, so we stayed with Sunlit Rush”).
+- **Professor-ready documentation:** Publish a short appendix summarizing each station’s narrative, exemplar songs, and metadata provenance. This doubles as interpretability evidence during the demo or report defence.
+
+### Implementation Hooks
+- Extend `scripts/clustering/export_deam_gmm.py` (or equivalent) to compute per-cluster genre counts, tag frequencies, and exemplar lists when producing the bundle. Store them in `clusters_meta.json` so downstream code and docs remain in sync.
+- Build a lightweight helper (e.g., `utils/deam_station_explainers.py`) that formats the persona strings and exposes a `why_this_song` function for the UI or logs.
+- Update evaluation docs to show how these explanations tie back to personalization goals, referencing the same fused VA outputs used in VEATIC.
+
+### Why Professors Will Appreciate It
+- Aligns with XAI and responsible AI criteria common in Master’s programmes: every recommendation comes with a reproducible rationale grounded in dataset metadata.
+- Demonstrates thoughtful user experience design by translating latent clusters into accessible language, rather than stopping at numerical metrics.
+- Provides tangible artefacts (profile cards, documentation, demo messaging) that can be showcased during assessment, signalling polish beyond baseline engineering.
+
+## Legacy Quadrant Accuracy Draft (Reference)
+
+The original plan remains below for archival purposes while we evaluate the explainability-first alternative.
+
 ## Checklist
 - [x] Export the five-component DEAM GMM (means, covariances, priors, quadrant labels) into a versioned bundle under `results/clustering/` with provenance metadata.
 - [x] Implement `scripts/clustering/deam_clusters.py` to annotate inference Parquet exports with DEAM posteriors, components, and quadrants.
