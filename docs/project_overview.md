@@ -770,6 +770,30 @@ This experiment evaluates the stabilization improvements from uncertainty-based 
 
 This study compares station-gated retrieval (GMM top-1; widen to top-2 if top posterior < 0.55) against ungated global k-NN. For the POC, we focus on song-level matching and evaluate alignment accuracy, variety, and user preference.
 
+### 7.3 VEATIC Evaluation Framework
+
+The VEATIC evaluation mirrors the canonical workflow documented in `docs/Stage VI - Evaluation/VEATIC_eval_framework.md` and is now built around a Parquet-first artifact flow. The process inventory below keeps new contributors aligned with the latest pipeline refactor.
+
+- **Prerequisites:** Ensure VEATIC ground-truth label CSVs live under `data/VEATIC/rating_averaged/` and that stabilized/unstabilized inference exports exist for the same video set. Activate the virtual environment with `source .venv/bin/activate.fish` before running any scripts.
+- **Primary artifact:** The inference pipeline emits `results/inference/pipeline_results_<timestamp>.parquet`, containing per-video predictions, metadata, and serialized mode payloads for both stabilized and unstabilized runs. This replaces the legacy paired JSON directories, which stay supported only as a fallback.
+- **Aggregation:** Run `python scripts/evaluation/aggregate_veatic_metrics.py results/inference/pipeline_results_<timestamp>.parquet` to generate three synchronized artifacts in `results/evaluation/`: `veatic_per_video_<timestamp>.csv`, `veatic_aggregate_<timestamp>.csv`, and `veatic_run_params_<timestamp>.json`.
+- **Metrics reported:** Dataset-level MAE (mean/median) for valence and arousal across scene, face, and fusion pathways; pathway coverage summaries; stabilization deltas (mean/median ΔMAE with 95% CIs); and any variance diagnostics embedded in the Parquet payload. Per-video CSVs expose clip-level deltas, pathway win/loss flags, and coverage indicators for deeper dives.
+- **Interpretation checklist:** Confirm fusion outperforms individual pathways, sanity-check stabilization deltas (expect near-zero mean shifts for current EMA settings), review coverage outliers, and inspect variance trends when fusion underperforms. Keep the run summary in `docs/Stage VI - Evaluation/` updated with the timestamped artifacts for reproducibility.
+
+Legacy JSON exports remain consumable, but they require manual pairing of `results/inference/stabilized/` and `results/inference/unstabilized/` directories before running a notebook-equivalent aggregator. Prefer the Parquet flow unless backward compatibility is necessary. <!-- Over-engineering: Section mirrors existing doc to centralize expectations without adding new process complexity. -->
+
+### 7.4 DEAM Evaluation Framework
+
+DEAM evaluation focuses on alignment between video-derived valence/arousal predictions and the Gaussian mixture clusters that drive song retrieval. Offline clustering (`notebooks/Inference/e2e_video_to_music_clusters.ipynb`) fits five GMM centroids over the DEAM song embeddings, each tagged to one of the four valence–arousal quadrants.
+
+- **Offline assets:** Persist cluster parameters (means, covariances, priors, and quadrant labels) so the inference pipeline can load them without re-fitting. Store them under `results/clustering/` or another versioned path alongside a README that documents the quadrant mapping.
+- **Runtime matching:** For every stabilized video prediction, map the valence/arousal pair into reference space `[-1, 1]`, query the fitted GMM for the most probable cluster, and return the associated playlist candidates.
+- **Quadrant accuracy metric:** During evaluation, compare the predicted video quadrant against the quadrant assigned to the matched cluster. Record `1` when they match and `0` otherwise, then compute mean accuracy across the evaluation set. Optionally surface per-quadrant confusion stats to reveal imbalance.
+- **Implementation considerations:** Ensure the evaluation script materializes the video-level quadrant labels (e.g., using simple sign checks with a tolerance band near the axes), loads the frozen cluster definitions, and logs the boolean correctness per sample before aggregation.
+- **Validation hooks:** Add a smoke test that replays the clustering notebook’s validation set, verifying ≥ baseline accuracy and flagging drift if cluster parameters change. Persist evaluation outputs under `results/evaluation/deam_quadrant_accuracy_<timestamp>.csv` for reproducibility.
+
+With the assets above in place, the accuracy computation described in the notebook is sufficient—the key missing piece today is a scripted export of the fitted GMM parameters plus an evaluation utility that consumes pipeline outputs to emit the quadrant-matching score. <!-- Over-engineering: Highlights required assets without over-specifying automation beyond the immediate POC need. -->
+
 ---
 
 ## 8. Implementation Timeline

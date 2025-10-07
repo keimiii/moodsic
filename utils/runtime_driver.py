@@ -21,7 +21,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import StatisticsError, median, mode
-from typing import Optional, Sequence, Union, List
+from typing import List, Optional, Sequence, Tuple, Union
 
 # Import types with a soft fallback to keep import-time light in constrained envs
 try:  # pragma: no cover - optional typing convenience
@@ -175,26 +175,13 @@ class PerceiveFusionDriver:
 
 
 @dataclass
-class VideoPerceptionResult:
-    """Container for fused valence/arousal time series extracted from a video."""
+class PerceptionSeries:
+    """Per-frame series with summary statistics for a perception pathway."""
 
-    video_path: Path
-    frame_indices: List[int]
     valence: List[float]
     arousal: List[float]
     var_valence: List[float]
     var_arousal: List[float]
-    fps: float
-    effective_fps: float
-    width: int
-    height: int
-    frame_count: Optional[int]
-    processed_frames: int
-    sample_stride: int
-    first_overlay: Optional["np.ndarray"] = None
-    last_overlay: Optional["np.ndarray"] = None
-    fusion_results: Optional[List[FusionResult]] = None
-    overlay_path: Optional[Path] = None
     mean_valence: Optional[float] = None
     mean_arousal: Optional[float] = None
     median_valence: Optional[float] = None
@@ -203,12 +190,174 @@ class VideoPerceptionResult:
     mode_arousal: Optional[float] = None
 
 
-__all__ = ["PerceiveFusionDriver", "VideoPerceptionResult"]
+@dataclass
+class PerceiveOnceResult:
+    """Single-frame perception bundle with raw fusion result and summaries."""
+
+    fusion: FusionResult
+    scene_result: PerceptionSeries
+    face_result: PerceptionSeries
+    fusion_result: PerceptionSeries
+
+    @property
+    def scene(self):  # pragma: no cover - simple passthrough property
+        return getattr(self.fusion, "scene", None)
+
+    @property
+    def face(self):  # pragma: no cover - simple passthrough property
+        return getattr(self.fusion, "face", None)
+
+    @property
+    def fused(self):  # pragma: no cover - simple passthrough property
+        return getattr(self.fusion, "fused", None)
+
+
+@dataclass
+class VideoPerceptionResult:
+    """Container for per-path valence/arousal series extracted from a video."""
+
+    video_path: Path
+    frame_indices: List[int]
+    fps: float
+    effective_fps: float
+    width: int
+    height: int
+    frame_count: Optional[int]
+    processed_frames: int
+    sample_stride: int
+    scene_result: PerceptionSeries
+    face_result: PerceptionSeries
+    fusion_result: PerceptionSeries
+    first_overlay: Optional["np.ndarray"] = None
+    last_overlay: Optional["np.ndarray"] = None
+    fusion_results: Optional[List[FusionResult]] = None
+    overlay_path: Optional[Path] = None
+
+    @property
+    def valence(self) -> List[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.valence
+
+    @property
+    def arousal(self) -> List[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.arousal
+
+    @property
+    def var_valence(self) -> List[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.var_valence
+
+    @property
+    def var_arousal(self) -> List[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.var_arousal
+
+    @property
+    def mean_valence(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.mean_valence
+
+    @property
+    def mean_arousal(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.mean_arousal
+
+    @property
+    def median_valence(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.median_valence
+
+    @property
+    def median_arousal(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.median_arousal
+
+    @property
+    def mode_valence(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.mode_valence
+
+    @property
+    def mode_arousal(self) -> Optional[float]:  # pragma: no cover - thin alias
+        return self.fusion_result.mode_arousal
+
+
+__all__ = [
+    "PerceiveFusionDriver",
+    "PerceptionSeries",
+    "PerceiveOnceResult",
+    "VideoPerceptionResult",
+]
+
+
+def _append_prediction(
+    prediction: Optional[object],
+    valence: List[float],
+    arousal: List[float],
+    var_valence: List[float],
+    var_arousal: List[float],
+) -> None:
+    """Append prediction values to running series, filling NaNs when invalid."""
+
+    if prediction is None or not getattr(prediction, "valid", True):
+        valence.append(math.nan)
+        arousal.append(math.nan)
+        var_valence.append(math.nan)
+        var_arousal.append(math.nan)
+        return
+
+    val = getattr(prediction, "valence", math.nan)
+    try:
+        valence.append(float(val))
+    except (TypeError, ValueError):
+        valence.append(math.nan)
+
+    aro = getattr(prediction, "arousal", math.nan)
+    try:
+        arousal.append(float(aro))
+    except (TypeError, ValueError):
+        arousal.append(math.nan)
+
+    var_v = getattr(prediction, "var_valence", None)
+    var_a = getattr(prediction, "var_arousal", None)
+    var_valence.append(float(var_v) if _finite_float(var_v) else math.nan)
+    var_arousal.append(float(var_a) if _finite_float(var_a) else math.nan)
+
+
+def _build_series(
+    valence: List[float],
+    arousal: List[float],
+    var_valence: List[float],
+    var_arousal: List[float],
+) -> PerceptionSeries:
+    """Create a PerceptionSeries with stats computed from finite samples."""
+
+    mean_v, median_v, mode_v = _compute_summary(valence)
+    mean_a, median_a, mode_a = _compute_summary(arousal)
+    return PerceptionSeries(
+        valence=list(valence),
+        arousal=list(arousal),
+        var_valence=list(var_valence),
+        var_arousal=list(var_arousal),
+        mean_valence=mean_v,
+        mean_arousal=mean_a,
+        median_valence=median_v,
+        median_arousal=median_a,
+        mode_valence=mode_v,
+        mode_arousal=mode_a,
+    )
+
+
+def _compute_summary(values: List[float]) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """Return (mean, median, mode) for finite entries in ``values``."""
+
+    finite = [float(v) for v in values if _finite_float(v)]
+    if not finite:
+        return None, None, None
+    mean_val = float(sum(finite) / len(finite))
+    median_val = float(median(finite))
+    try:
+        mode_val = float(mode(finite))
+    except StatisticsError:
+        mode_val = None
+    return mean_val, median_val, mode_val
 
 
 # ---------------- Minimal functional helper ----------------
 
-# One-shot helper that delegates to SceneFaceFusion and returns FusionResult
+# One-shot helper that delegates to SceneFaceFusion and returns aggregates
 
 
 def perceive_once(
@@ -240,13 +389,12 @@ def perceive_once(
     # Variance-weighted fusion guardrails
     variance_floor: Optional[float] = 1e-3,
     max_weight_ratio: Optional[float] = None,
-) -> FusionResult:
+) -> PerceiveOnceResult:
     """
     Run a PERCEIVE flow on a single BGR frame via models.fusion.SceneFaceFusion.
 
     - Delegates to SceneFaceFusion for scene/face inference and fusion.
-    - Returns fused V/A and per-path readings (when available) in reference
-      space [-1, 1].
+    - Returns raw fusion output alongside per-path series + summary stats.
     """
     # Import locally to avoid heavy import at module import time
     try:
@@ -284,7 +432,55 @@ def perceive_once(
         max_weight_ratio=max_weight_ratio,
     )
 
-    return fusion.perceive_and_fuse(frame_bgr)
+    fusion_result = fusion.perceive_and_fuse(frame_bgr)
+
+    scene_vals: List[float] = []
+    scene_aros: List[float] = []
+    scene_vvars: List[float] = []
+    scene_avars: List[float] = []
+
+    face_vals: List[float] = []
+    face_aros: List[float] = []
+    face_vvars: List[float] = []
+    face_avars: List[float] = []
+
+    fused_vals: List[float] = []
+    fused_aros: List[float] = []
+    fused_vvars: List[float] = []
+    fused_avars: List[float] = []
+
+    _append_prediction(
+        getattr(fusion_result, "scene", None),
+        scene_vals,
+        scene_aros,
+        scene_vvars,
+        scene_avars,
+    )
+    _append_prediction(
+        getattr(fusion_result, "face", None),
+        face_vals,
+        face_aros,
+        face_vvars,
+        face_avars,
+    )
+    _append_prediction(
+        getattr(fusion_result, "fused", None),
+        fused_vals,
+        fused_aros,
+        fused_vvars,
+        fused_avars,
+    )
+
+    scene_series = _build_series(scene_vals, scene_aros, scene_vvars, scene_avars)
+    face_series = _build_series(face_vals, face_aros, face_vvars, face_avars)
+    fusion_series = _build_series(fused_vals, fused_aros, fused_vvars, fused_avars)
+
+    return PerceiveOnceResult(
+        fusion=fusion_result,
+        scene_result=scene_series,
+        face_result=face_series,
+        fusion_result=fusion_series,
+    )
 
 
 def _resolve_video_path(video_path: Union[str, Path], search_roots: Optional[Sequence[Path]]) -> Path:
@@ -359,7 +555,7 @@ def perceive_video(
     return_fusion: bool = False,
     search_roots: Optional[Sequence[Path]] = None,
 ) -> VideoPerceptionResult:
-    """Run PERCEIVE over a full video and collect fused valence/arousal series.
+    """Run PERCEIVE over a full video and collect per-path valence/arousal series.
 
     Parameters mirror the notebook defaults while keeping the API frontend-agnostic.
     If ``frame_stride`` is omitted, the helper samples roughly ``target_sample_fps``
@@ -441,10 +637,22 @@ def perceive_video(
             writer = None
 
     frame_indices: List[int] = []
-    vals: List[float] = []
-    aros: List[float] = []
-    vvars: List[float] = []
-    avars: List[float] = []
+
+    scene_vals: List[float] = []
+    scene_aros: List[float] = []
+    scene_vvars: List[float] = []
+    scene_avars: List[float] = []
+
+    face_vals: List[float] = []
+    face_aros: List[float] = []
+    face_vvars: List[float] = []
+    face_avars: List[float] = []
+
+    fused_vals: List[float] = []
+    fused_aros: List[float] = []
+    fused_vvars: List[float] = []
+    fused_avars: List[float] = []
+
     fusion_results: Optional[List[FusionResult]] = [] if return_fusion else None
 
     first_overlay = None
@@ -469,10 +677,27 @@ def perceive_video(
 
             res = driver.step(frame)
 
-            vals.append(float(res.fused.valence))
-            aros.append(float(res.fused.arousal))
-            vvars.append(float(res.fused.var_valence) if _finite_float(res.fused.var_valence) else math.nan)
-            avars.append(float(res.fused.var_arousal) if _finite_float(res.fused.var_arousal) else math.nan)
+            _append_prediction(
+                getattr(res, "scene", None),
+                scene_vals,
+                scene_aros,
+                scene_vvars,
+                scene_avars,
+            )
+            _append_prediction(
+                getattr(res, "face", None),
+                face_vals,
+                face_aros,
+                face_vvars,
+                face_avars,
+            )
+            _append_prediction(
+                getattr(res, "fused", None),
+                fused_vals,
+                fused_aros,
+                fused_vvars,
+                fused_avars,
+            )
             frame_indices.append(idx)
 
             if return_fusion and fusion_results is not None:
@@ -498,34 +723,13 @@ def perceive_video(
         if writer is not None:
             writer.release()
 
-    if processed:
-        mean_valence = float(sum(vals) / processed)
-        mean_arousal = float(sum(aros) / processed)
-        median_valence = float(median(vals))
-        median_arousal = float(median(aros))
-        try:
-            mode_valence = float(mode(vals))
-        except StatisticsError:
-            mode_valence = None
-        try:
-            mode_arousal = float(mode(aros))
-        except StatisticsError:
-            mode_arousal = None
-    else:
-        mean_valence = None
-        mean_arousal = None
-        median_valence = None
-        median_arousal = None
-        mode_valence = None
-        mode_arousal = None
+    scene_series = _build_series(scene_vals, scene_aros, scene_vvars, scene_avars)
+    face_series = _build_series(face_vals, face_aros, face_vvars, face_avars)
+    fusion_series = _build_series(fused_vals, fused_aros, fused_vvars, fused_avars)
 
     result = VideoPerceptionResult(
         video_path=src,
         frame_indices=frame_indices,
-        valence=vals,
-        arousal=aros,
-        var_valence=vvars,
-        var_arousal=avars,
         fps=fps,
         effective_fps=effective_fps,
         width=width,
@@ -533,16 +737,13 @@ def perceive_video(
         frame_count=frame_count if frame_count > 0 else None,
         processed_frames=processed,
         sample_stride=stride,
+        scene_result=scene_series,
+        face_result=face_series,
+        fusion_result=fusion_series,
         first_overlay=first_overlay if capture_overlays else None,
         last_overlay=last_overlay if capture_overlays else None,
         fusion_results=fusion_results if return_fusion else None,
         overlay_path=out_path if writer is not None else None,
-        mean_valence=mean_valence,
-        mean_arousal=mean_arousal,
-        median_valence=median_valence,
-        median_arousal=median_arousal,
-        mode_valence=mode_valence,
-        mode_arousal=mode_arousal,
     )
 
     return result

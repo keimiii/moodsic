@@ -2,6 +2,8 @@
 
 This document captures the current VEATIC-specific runtime behavior for the PERCEIVE stage and outlines the assumptions behind the demo notebooks and `utils/runtime_driver.py` helper.
 
+> Status: The PELT-driven segmentation work described here is planned and not yet wired into the runtime; the live pipeline still emits the unsegmented outputs outlined below.
+
 ## Scope
 
 - Applies to one-shot video evaluation (e.g., `notebooks/e2e_video_to_fusion.ipynb`).
@@ -44,17 +46,15 @@ This document captures the current VEATIC-specific runtime behavior for the PERC
 - The notebook plots fused valence/arousal and (when available) the associated variances for quick QA.
 - Downstream evaluation should align these outputs with VEATIC’s frame-level labels (e.g., by matching timestamps or frame indices after stride/downsampling).
 
-## Proposed Music Cue Segmentation (PoC)
+## Planned Music Cue Segmentation (PELT PoC)
 
-- Motivation: the scene adapter is trained on still images while inference runs on full clips. Processing one frame per second keeps latency low but flattens emotional build-ups; we want to identify the specific spans where music should enter instead of scoring the entire clip.
-- Plan: run offline change-point detection (PELT via `ruptures`) over the fused valence–arousal time series returned by `perceive_video`. Smooth VA with a short rolling mean, optionally transform to an energy envelope (e.g., `sqrt(v**2 + a**2)`), and feed the sequence to the detector.
-- Output: change points split each clip into emotion regimes. Post-process segments (minimum duration, mean energy thresholds, uncertainty gating) to mark candidate windows for music cues while leaving low-intensity lead-ins untouched.
-- Benefits over current flow:
-  - Without change points we either (a) score the whole clip uniformly or (b) hand-trim sections, both ignoring VEATIC’s continuous labels.
-  - With change points the pipeline can automatically isolate the high-arousal climax of a tense scene or a brief emotional twist inside an otherwise calm dialogue, enabling tighter cue timing.
-- PELT (Pruned Exact Linear Time) in plain language: think of it as an algorithm that watches the emotional curve and decides where to “cut” the video into chapters. It tries every possible split, but quickly prunes the ones that would not improve the story, so we keep only the points where the mood truly changes while keeping computation fast.
-- Illustrative scenarios:
-  - **Slow-burn to climax:** a VEATIC clip spends 40 seconds in low-energy dialogue before a sudden confrontation. Today the 1 fps samples all look similar, so the MATCH stage would score the entire minute. PELT spots the jump in the smoothed VA envelope, cuts the clip into “build-up” and “climax” segments, and we can launch the soundtrack only from the inflection point onward.
+- Motivation: while the current pipeline already produces fused, face, and scene valence/arousal series at ≈1 fps, emotional build-ups still get averaged into a single clip-level score. Segmenting the fused trace after inference is intended to surface those moments for downstream cue placement.
+- Proposed approach (not yet implemented): run offline change-point detection (PELT via `ruptures`) on the fused valence–arousal series returned by `perceive_video`. Starting from the stabilized output, optionally apply a short rolling mean or transform the signal into an energy envelope (e.g., `sqrt(v**2 + a**2)`) before detection to discourage spurious cuts.
+- Expected output: change points that partition each clip into emotion regimes. Post-processing (minimum duration filters, mean energy thresholds, uncertainty gating) would promote segments worth scoring while leaving low-intensity lead-ins untouched.
+- Relationship to evaluation: inference should continue to operate on full clips; PELT would be a post-processing step whose segment timestamps can be compared with VEATIC labels that are sampled on the same stride.
+- Why this is future work: wiring the detector requires new metadata plumbing (segment descriptors, optional clip trimming utilities) plus evaluation notebooks that verify the detected boundaries against ground truth before MATCH consumes them.
+- Illustrative scenarios (still conceptual):
+  - **Slow-burn to climax:** a VEATIC clip spends 40 seconds in low-energy dialogue before a sudden confrontation. Today the 1 fps samples all look similar, so the MATCH stage would score the entire minute. PELT would spot the jump in the smoothed VA envelope, cut the clip into “build-up” and “climax” segments, and we could trigger the soundtrack only from the inflection point onward.
 
     | Time (s) | Valence | Arousal | VA Energy | Action without PELT | Action with PELT |
     | --- | --- | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ This document captures the current VEATIC-specific runtime behavior for the PERC
     | 0–24 | 0.05 | 0.10 | 0.11 | Subtle pad (false positive) | Hold silence |
     | 25–31 | –0.45 | 0.85 | 0.96 | Same pad (missed impact) | Insert sting |
     | 32–50 | 0.00 | 0.08 | 0.08 | Pad continues | Return to silence |
-- Next steps: add a notebook experiment inside `docs/Stage IV — Inference` that loads a `VideoPerceptionResult`, runs the segmentation routine, and overlays detected regions on the VA plots for review before wiring outputs into MATCH.
+- Next steps: add a notebook experiment inside `docs/Stage IV — Inference` that loads a `VideoPerceptionResult`, runs the segmentation routine, and overlays detected regions on the VA plots for review before wiring outputs into MATCH. Current notebooks should continue to treat PELT as an exploratory, opt-in post-process.
 
 ## Integration Pointers
 
@@ -85,3 +85,5 @@ This document captures the current VEATIC-specific runtime behavior for the PERC
 - Scene adapter example: `models/scene/clip_vit_scene_adapter.py`
 
 Add future VEATIC-specific evaluation notes here (e.g., label alignment scripts, metrics, or comparative baselines) to keep the runtime documentation centralized.
+
+<!-- ImplNote: simple status clarifications and future-work cues keep scope aligned; nothing over-engineered, alternative would be leaving unannotated doc which risks confusion. -->
