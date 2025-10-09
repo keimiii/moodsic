@@ -125,7 +125,7 @@ This is a proof-of-concept implementation using static data:
 Todos:
 - [x] Fetch results from parquet
 - [ ] Pick top 10 songs
-- [ ] Play music with video
+- [x] Play music with video
 - [ ] Analysis (face, scenes, fusion - see which one is used!)
 - [ ] Display both clusters (GMM and HDBSCAN, can toggle)
 

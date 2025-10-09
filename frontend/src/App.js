@@ -14,6 +14,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
 
@@ -48,6 +49,17 @@ function App() {
     setSelectedVideo(video);
     setVideoUrl(`/api/video/${video.id}`);
     setEmotionData(null); // Reset emotion data when selecting new video
+    if (audioElement) {
+      audioElement.pause();
+    }
+    setIsPlaying(false);
+    setCurrentSong(null);
+    setCurrentTime(0);
+    setDuration(0);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
   };
 
   // Process video for emotion analysis
@@ -94,12 +106,53 @@ function App() {
 
     audio.addEventListener('ended', () => {
       setIsPlaying(false);
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
     });
 
-    audio.play();
+    const startMediaPlayback = () => {
+      if (videoRef.current) {
+        try {
+          videoRef.current.currentTime = 0;
+          const videoPromise = videoRef.current.play();
+          if (videoPromise && typeof videoPromise.catch === 'function') {
+            videoPromise.catch((error) => {
+              console.warn('Video playback blocked:', error);
+            });
+          }
+        } catch (error) {
+          console.warn('Unable to start video playback:', error);
+        }
+      }
+
+      const audioPromise = audio.play();
+      if (audioPromise && typeof audioPromise.then === 'function') {
+        audioPromise
+          .then(() => setIsPlaying(true))
+          .catch((error) => {
+            console.warn('Audio playback blocked:', error);
+            setIsPlaying(false);
+          });
+      } else {
+        setIsPlaying(true);
+      }
+    };
+
     setAudioElement(audio);
     setCurrentSong(song);
-    setIsPlaying(true);
+    setCurrentTime(0);
+
+    if (audio.readyState >= 1) {
+      startMediaPlayback();
+    } else {
+      const handleCanPlay = () => {
+        audio.removeEventListener('canplay', handleCanPlay);
+        startMediaPlayback();
+      };
+      audio.addEventListener('canplay', handleCanPlay);
+      audio.load();
+    }
   };
 
   // Toggle play/pause
@@ -107,11 +160,55 @@ function App() {
     if (audioElement) {
       if (isPlaying) {
         audioElement.pause();
+        if (videoRef.current && !videoRef.current.paused) {
+          videoRef.current.pause();
+        }
         setIsPlaying(false);
       } else {
-        audioElement.play();
+        if (videoRef.current) {
+          try {
+            const videoPromise = videoRef.current.play();
+            if (videoPromise && typeof videoPromise.catch === 'function') {
+              videoPromise.catch((error) => {
+                console.warn('Video playback blocked:', error);
+              });
+            }
+          } catch (error) {
+            console.warn('Unable to resume video playback:', error);
+          }
+        }
+        const audioPromise = audioElement.play();
+        if (audioPromise && typeof audioPromise.then === 'function') {
+          audioPromise
+            .then(() => setIsPlaying(true))
+            .catch((error) => {
+              console.warn('Audio playback blocked:', error);
+              setIsPlaying(false);
+            });
+        } else {
+          setIsPlaying(true);
+        }
+      }
+    }
+  };
+
+  const handleVideoPlay = () => {
+    if (audioElement && audioElement.paused) {
+      const audioPromise = audioElement.play();
+      if (audioPromise && typeof audioPromise.catch === 'function') {
+        audioPromise.catch((error) => {
+          console.warn('Audio playback blocked:', error);
+        });
+      } else {
         setIsPlaying(true);
       }
+    }
+  };
+
+  const handleVideoPause = () => {
+    if (audioElement && !audioElement.paused) {
+      audioElement.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -280,6 +377,9 @@ function App() {
               <video 
                 src={videoUrl} 
                 controls 
+                ref={videoRef}
+                onPlay={handleVideoPlay}
+                onPause={handleVideoPause}
                 style={{ display: 'block' }}
               />
             ) : (
