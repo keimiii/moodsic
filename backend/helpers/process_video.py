@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 from math import sqrt
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import polars as pl
 
@@ -16,6 +16,7 @@ SONG_CLUSTER_PATH = REPO_ROOT / "notebooks/Dataset - DEAM/artifacts/deam_gmm/dea
 ENRICHED_PARQUET_PATH = PIPELINE_RESULTS_PATH.with_name(
     f"{PIPELINE_RESULTS_PATH.stem}_enriched{PIPELINE_RESULTS_PATH.suffix}"
 )
+VEATIC_PER_VIDEO_PATH = REPO_ROOT / "results/evaluation/veatic_per_video_20251006_144126.csv"
 DEFAULT_STABILIZER = False
 
 _REQUIRED_PIPELINE_COLUMNS = [
@@ -25,6 +26,11 @@ _REQUIRED_PIPELINE_COLUMNS = [
     "fusion_mean_arousal",
 ]
 _SONG_DISTANCE_KEY = "distance"
+_MAE_COLUMNS = {
+    "scene": ("mae_scene_valence", "mae_scene_arousal"),
+    "face": ("mae_face_valence", "mae_face_arousal"),
+    "fusion": ("mae_fusion_valence", "mae_fusion_arousal"),
+}
 
 
 @lru_cache(maxsize=1)
@@ -150,6 +156,52 @@ def _maybe_write_enriched_index() -> None:
     LOGGER.info("Wrote enriched pipeline index to %s", ENRICHED_PARQUET_PATH)
 
 
+@lru_cache(maxsize=1)
+def _load_per_video_metrics() -> pl.DataFrame:
+    if not VEATIC_PER_VIDEO_PATH.exists():
+        raise FileNotFoundError(
+            f"Per-video evaluation CSV not found at {VEATIC_PER_VIDEO_PATH}"
+        )
+    return pl.read_csv(VEATIC_PER_VIDEO_PATH)
+
+
+def _mae_for_video(video_id: str, stabilizer_enabled: bool) -> Dict[str, Dict[str, Optional[float]]]:
+    try:
+        metrics = _load_per_video_metrics()
+    except FileNotFoundError:
+        return {}
+
+    video_matches = metrics.filter(pl.col("video_id").cast(pl.Utf8) == str(video_id))
+    if video_matches.is_empty():
+        return {}
+
+    stabilizer_key = str(stabilizer_enabled).lower()
+    preferred = video_matches.filter(
+        pl.col("Stablization").cast(pl.Utf8).str.to_lowercase() == stabilizer_key
+    )
+    if preferred.is_empty():
+        preferred = video_matches
+
+    row = preferred.row(0, named=True)
+
+    def _to_float(value: Any) -> Optional[float]:
+        if value in ("", None):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    mae_payload: Dict[str, Dict[str, Optional[float]]] = {}
+    for pathway, (valence_key, arousal_key) in _MAE_COLUMNS.items():
+        mae_payload[pathway] = {
+            "valence": _to_float(row.get(valence_key)),
+            "arousal": _to_float(row.get(arousal_key)),
+        }
+
+    return mae_payload
+
+
 def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
     """
     Look up fused emotion scores for the provided VEATIC video.
@@ -180,6 +232,7 @@ def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
 
     cluster_id = _predict_cluster(valence, arousal)
     song = _pick_song(cluster_id, valence, arousal)
+    mae_metrics = _mae_for_video(video_id, stabilizer_enabled)
 
     result: Dict[str, Any] = {
         "video_name": video_name,
@@ -188,6 +241,8 @@ def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
         "arousal": arousal,
         "cluster_id": cluster_id,
     }
+    if mae_metrics:
+        result["mae"] = mae_metrics
 
     if song:
         result.update(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import './index.css';
 
@@ -219,6 +219,46 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatMae = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value.toFixed(3);
+    }
+    return '—';
+  };
+
+  const bestMaePathway = useMemo(() => {
+    if (!emotionData?.mae) {
+      return null;
+    }
+
+    let bestPathway = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    ['scene', 'face', 'fusion'].forEach((pathway) => {
+      const metrics = emotionData.mae[pathway];
+      if (!metrics) {
+        return;
+      }
+
+      const scores = [metrics.valence, metrics.arousal].filter(
+        (value) => typeof value === 'number' && Number.isFinite(value)
+      );
+
+      if (!scores.length) {
+        return;
+      }
+
+      const averageMae = scores.reduce((sum, value) => sum + Math.abs(value), 0) / scores.length;
+
+      if (averageMae < bestScore) {
+        bestScore = averageMae;
+        bestPathway = pathway;
+      }
+    });
+
+    return bestPathway;
+  }, [emotionData]);
+
   // Canvas animation
   useEffect(() => {
     if (!canvasRef.current || !clusters.length) return;
@@ -410,6 +450,39 @@ function App() {
                   </div>
                   <div className="signal-status">Variance-weighted</div>
                 </article>
+                {emotionData.mae && (
+                  <div className="mae-metrics">
+                    <div className="mae-header">
+                      <span className="mae-heading">Pathway MAE</span>
+                      <span className="mae-subheading">Valence · Arousal</span>
+                    </div>
+                    <div className="mae-grid">
+                      {['scene', 'face', 'fusion'].map((pathway) => {
+                        const metrics = emotionData.mae[pathway] || {};
+                        const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                        return (
+                          <article
+                            key={pathway}
+                            className={`mae-card${pathway === bestMaePathway ? ' is-best' : ''}`}
+                          >
+                            <header className="mae-title">
+                              <span>{title}</span>
+                              {pathway === bestMaePathway && <span className="mae-badge">Lead</span>}
+                            </header>
+                            <div className="mae-row">
+                              <span className="mae-label">Val</span>
+                              <span className="mae-value">{formatMae(metrics.valence)}</span>
+                            </div>
+                            <div className="mae-row">
+                              <span className="mae-label">Aro</span>
+                              <span className="mae-value">{formatMae(metrics.arousal)}</span>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div className="video-description">
