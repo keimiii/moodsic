@@ -15,7 +15,6 @@
   - Minimum dwell time: 20–30 seconds; maintain recent-song memory to avoid repeats
 
 - Scale alignment:
-  - POC uses DEAM static annotations `[1, 9]` (dynamic `[-10, 10]` also available).
-  - FE→DEAM mappings used during retrieval (static [1, 9]):
-    - `v_deam = 1 + (8/6) * (v_fe + 3)`
-    - `a_deam = 1 + (8/6) * a_fe`
+  - `EmotionScaleAligner` is the canonical helper for converting between FindingEmo (`v∈[-3,3], a∈[0,6]`), reference space `[-1,1]`, and DEAM static `[1,9]`.
+  - Retrieval/matching pipelines operate on reference-space values; conversions to/from dataset scales should use the aligner at pipeline boundaries.
+  - Some legacy utilities still perform manual `/3` and `+/-3` normalization; track migration to the aligner when touching those paths.

@@ -19,7 +19,7 @@ At runtime, the system still follows the perceive → stabilize → match pipeli
 ## Scale Contract
 
 - Internal reference: All adapters (scene, face) and fusion operate in the common reference space `[-1, 1]` for valence and arousal.
-- Boundary conversions: Use `utils/emotion_scale_aligner.EmotionScaleAligner` to convert to/from dataset or consumer scales (e.g., FindingEmo, DEAM) only at boundaries (training/evaluation, retrieval, and diagnostics/visualization).
+- Boundary conversions: `utils.emotion_scale_aligner.EmotionScaleAligner` is the canonical helper for converting to/from dataset or consumer scales (e.g., FindingEmo, DEAM). New work should route through it; legacy utilities still contain manual `/3` and `±3` math until migrated.
 - Calibration: Apply `models.calibration.CrossDomainCalibration` in the reference space; keep optional and clamp outputs back to `[-1, 1]`.
 - Development safety: In tests/diagnostics, enable strict range checks with `EmotionScaleAligner(strict=True)` to catch out‑of‑range values.
 
@@ -56,7 +56,7 @@ Single-source emotion detection also suffers from a fundamental attribution prob
 **Why These Specific Datasets**
 
 We use two carefully selected datasets that share a common emotional measurement system:
-- **FindingEmo**: ≈25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values. The processed corpus in `data/processed_annotations.csv` keeps 19,738 verified downloads; the latest face-cache covers roughly 7.4k images (~38%) for face-path ablations.
+- **FindingEmo**: ≈25,000 images labeled with valence (happy vs. sad) and arousal (excited vs. calm) values. The processed corpus in `data/processed_annotations.csv` keeps 19,738 verified downloads. Face-path ablations rely on on-the-fly MediaPipe/Haar detection, which currently surfaces ≈7.4k face-containing images (~38%) when we batch the dataset; no static face cache is versioned.
 - **DEAM**: 1,802 songs with the same valence-arousal annotations
 
 This shared measurement system enables direct emotion mapping between video and music. When video shows specific valence-arousal values, we can query music with matching emotional signatures.
@@ -182,7 +182,8 @@ by the richer variance signal.
 
 - Status: CLIP ViT-B/32 with a lightweight dropout head ("CLIP_ViT-B32_improved")
   is the production scene backbone. Ablations across eight candidates (see
-  `docs/scene_model_ablation.md`) showed this configuration delivering the best
+  [Stage III — Training/scene_model_ablation.md](docs/Stage%20III%20—%20Training/scene_model_ablation.md)
+  for details) showed this configuration delivering the best
   FindingEmo performance once all scores were reported in the common [-1, 1]
   space using `fe_to_ref` scaling. The exported checkpoint lives at
   `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` and is loaded
@@ -193,7 +194,8 @@ by the richer variance signal.
   - Average MAE: 0.3913
   - Spearman (valence / arousal / avg): 0.6643 / 0.3247 / 0.4945
   These metrics come from the held-out split in
-  `docs/scene_model_ablation.md` (CLIP_ViT-B32_improved column) and outperform
+  [Stage III — Training/scene_model_ablation.md](docs/Stage%20III%20—%20Training/scene_model_ablation.md)
+  (CLIP_ViT-B32_improved column) and outperform
   the strongest DINOv3 baseline (`dinov3_mlp`) by roughly 6% absolute MAE
   (0.4163 → 0.3913).
 - When CLIP resources are unavailable (e.g., offline experimentation), the
@@ -205,25 +207,24 @@ by the richer variance signal.
 - **Emotion-aware pretraining signal** — CLIP’s vision encoder is distilled from
   image–text pairs that emphasize human-centric semantics, so its frozen
   features already correlate with affective cues. Fine-tuning those features on
-  the modest FindingEmo split (≈13k training images;
-  `docs/scene_model_ablation.md:7`) yields the lowest MAE and highest rank
-  metrics in the ablation (`docs/scene_model_ablation.md:22-25`).
+  the modest FindingEmo split (≈13k training images, as detailed in that
+  ablation summary) yields the lowest MAE and highest rank metrics reported
+  there.
   DINOv3 relies on self-supervised invariances without any textual grounding, so
   the regression head must learn the emotion mapping almost from scratch — a
   tougher fit for the limited dataset.
 - **Regularised multitask head** — The improved CLIP run adds dropout-heavy
-  regression heads plus an auxiliary pseudo-emo8 classification loss
-  (`docs/scene_model_ablation.md:16-17`), which stabilises optimisation and
-  reduces overfitting. The DINO variants use plain MSE on valence/arousal, so
-  they lack that extra supervision signal. The result is a ≈0.025 improvement in
-  average MAE after scaling to [-1, 1] (0.3913 vs. 0.4163).
+  regression heads plus an auxiliary pseudo-emo8 classification loss described
+  in the ablation doc, which stabilises optimisation and reduces overfitting.
+  The DINO variants use plain MSE on valence/arousal, so they lack that extra
+  supervision signal. The result is a ≈0.025 improvement in average MAE after
+  scaling to [-1, 1] (0.3913 vs. 0.4163).
 - **Augmentation + resolution alignment** — CLIP maintains its native
-  224×224 crop pipeline with colour jitter, perspective, and Gaussian blur
-  (`docs/scene_model_ablation.md:12`), closely matching the model’s pretraining
-  distribution. The DINO notebooks resize frames to 800×608 with a “squish”
-  transform, leading to aspect warping and less aggressive colour augmentation.
-  That gap likely explains why DINO’s Spearman scores plateau around 0.43 while
-  CLIP reaches 0.49 (`docs/scene_model_ablation.md:23`).
+  224×224 crop pipeline with colour jitter, perspective, and Gaussian blur,
+  closely matching the model’s pretraining distribution. The DINO notebooks
+  resize frames to 800×608 with a “squish” transform, leading to aspect warping
+  and less aggressive colour augmentation. That gap likely explains why DINO’s
+  Spearman scores plateau around 0.43 while CLIP reaches 0.49 in the same report.
 
 #### Future scene-model enhancements (time-permitting)
 
@@ -231,18 +232,18 @@ by the richer variance signal.
   parameter-efficient modules (LoRA or bottleneck adapters) on top of the frozen
   backbones. This keeps compute modest while giving the model capacity to learn
   emotion-specific shifts; it may narrow the 0.025 MAE gap highlighted in the
-  ablation (`docs/scene_model_ablation.md:25`).
+  ablation notes.
 - **Curriculum with VEATIC pseudo-labels** — Use the richer VEATIC video set for
   semi-supervised fine-tuning by distilling high-confidence CLIP predictions
   into additional training pairs. This would expand coverage beyond the ≈13k
-  labelled FindingEmo frames (`docs/scene_model_ablation.md:7`) and expose the
-  model to dynamic lighting and occlusion scenarios documented in VEATIC
-  (`docs/project_overview.md:88-113`).
+  labelled FindingEmo frames summarised in that ablation and expose the model to
+  dynamic lighting and occlusion scenarios described in the VEATIC dataset
+  section above.
 - **Temporal-aware scene encoder** — Extend the pipeline with a lightweight
   temporal transformer or 3D CNN fed by the existing CLIP embeddings. Even a
   frame-level EMA is crude compared to modelling motion directly; incorporating
   temporal context could stabilise arousal predictions before they reach the
-  fusion stage (`docs/project_overview.md:208-214`).
+  fusion stage described earlier in this overview.
 
 #### Historical: DINOv3 ViT-B/16 baseline
 
@@ -654,10 +655,12 @@ v_var, a_var = res.fused.var_valence, res.fused.var_arousal
 ## 5. Music Matching with Proper Scaling
 
 The production matcher is `utils.song_matcher.SongMatcher`. It operates in the
-reference `[-1, 1]` valence/arousal space, so every upstream perception module
-converts its outputs with `EmotionScaleAligner` before calling into the matcher.
-DEAM song tables are precomputed in the same reference space (`valence_ref`,
-`arousal_ref`) to avoid repeated conversions at runtime.
+reference `[-1, 1]` valence/arousal space and expects callers to supply
+reference-space values. `EmotionScaleAligner` is the preferred way to perform
+those conversions, although some legacy pipelines still use the older hand-rolled
+formulas when normalizing FindingEmo labels. DEAM song tables are precomputed in
+the same reference space (`valence_ref`, `arousal_ref`) to avoid repeated
+conversions at runtime.
 
 ### How the current matcher works
 - **Cluster gating**: incoming `(v_ref, a_ref)` is transformed with the persisted
@@ -786,13 +789,15 @@ Legacy JSON exports remain consumable, but they require manual pairing of `resul
 
 DEAM evaluation focuses on alignment between video-derived valence/arousal predictions and the Gaussian mixture clusters that drive song retrieval. Offline clustering (`notebooks/Inference/e2e_video_to_music_clusters.ipynb`) fits five GMM centroids over the DEAM song embeddings, each tagged to one of the four valence–arousal quadrants.
 
+**Status — Under Consideration.** We are reassessing the previously proposed quadrant-accuracy evaluator because it compares fused valence/arousal inputs against the quadrant metadata embedded in the same GMM bundle. That makes the metric a wiring sanity check rather than an independent test of personalization quality, unlike the VEATIC workflow that benchmarks against a held-out label set. The implementation draft remains useful as reference but is on hold until we land on a more informative evaluation pathway.
+
 - **Offline assets:** Persist cluster parameters (means, covariances, priors, and quadrant labels) so the inference pipeline can load them without re-fitting. Store them under `results/clustering/` or another versioned path alongside a README that documents the quadrant mapping.
 - **Runtime matching:** For every stabilized video prediction, map the valence/arousal pair into reference space `[-1, 1]`, query the fitted GMM for the most probable cluster, and return the associated playlist candidates.
-- **Quadrant accuracy metric:** During evaluation, compare the predicted video quadrant against the quadrant assigned to the matched cluster. Record `1` when they match and `0` otherwise, then compute mean accuracy across the evaluation set. Optionally surface per-quadrant confusion stats to reveal imbalance.
-- **Implementation considerations:** Ensure the evaluation script materializes the video-level quadrant labels (e.g., using simple sign checks with a tolerance band near the axes), loads the frozen cluster definitions, and logs the boolean correctness per sample before aggregation.
-- **Validation hooks:** Add a smoke test that replays the clustering notebook’s validation set, verifying ≥ baseline accuracy and flagging drift if cluster parameters change. Persist evaluation outputs under `results/evaluation/deam_quadrant_accuracy_<timestamp>.csv` for reproducibility.
+- **Quadrant accuracy draft:** Original plan: compare the predicted video quadrant against the matched cluster’s quadrant, recording `1` for matches and `0` for mismatches, then aggregate accuracy. Current decision: treat this as a smoke test for bundle drift only; it does not satisfy the POC’s evidence bar on its own.
+- **Explainable stations (alternative focus):** Reuse DEAM metadata to craft station personas (centroid VA, dominant genres, exemplar tracks, posterior margins) and expose “why this song” blurbs. This interpretability-forward approach offers clearer value for personalization reporting and aligns with XAI expectations in the academic review.
+- **Validation hooks:** Regardless of the final path, keep a regression check that replays the clustering notebook’s validation set to detect drift and archive any exported station metadata with provenance under `results/clustering/`.
 
-With the assets above in place, the accuracy computation described in the notebook is sufficient—the key missing piece today is a scripted export of the fitted GMM parameters plus an evaluation utility that consumes pipeline outputs to emit the quadrant-matching score. <!-- Over-engineering: Highlights required assets without over-specifying automation beyond the immediate POC need. -->
+With the assets above in place, we can pivot between the smoke-test evaluator and the explainable-stations deliverables without refitting the core clustering pipeline. <!-- Over-engineering: Highlights required assets without over-specifying automation beyond the immediate POC need. -->
 
 ---
 
