@@ -99,7 +99,7 @@ Acceptance criteria:
 - Why: Enable end-to-end usage: scene + face fusion with uncertainty and graceful no-face handling.
 - How:
   - Implement `models/fusion.py` with `SceneFaceFusion` from docs (inverse-variance weighting; fallback to fixed weights when variances unavailable).
-  - Integrate in runtime pipeline driver (if applicable) and/or `app.py` as a debug overlay:
+  - Integrate in the runtime pipeline driver (if applicable) and/or surface the metrics inside the front-end demo (React canvas overlay, debug panel, etc.):
     - Instantiate `EmoNetSingleFaceProcessor`, `EmoNetAdapter`, and scene model.
     - Ensure both scene and face predictions are in reference space [-1, 1] prior to fusion.
     - On each frame: get scene mean/var via MC Dropout; get face `(v,a,var)` via adapter; fuse; optionally draw `(v,a)` and uncertainties on the video stream; convert to FE/DEAM only for reporting or downstream matching as required.

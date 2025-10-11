@@ -1,6 +1,6 @@
-# EmoRec
+# Moodsic
 
-A facial emotion recognition application with Streamlit web interface and video processing capabilities.
+Emotion-aware music recommendation prototype powered by a Flask backend, React front-end, and dual-pathway perception stack.
 
 ## Installation and Running
 
@@ -23,6 +23,7 @@ python scripts/findingemo_parallel_download.py --workers 100 --timeout 15
 ```bash
 ./run_app.sh
 ```
+This script bootstraps the Flask API (`backend/app.py`) and the React dashboard (`frontend/src/App.js`) so the VEATIC demo, DEAM clusters, and synchronized audio all launch together.
 
 ## Project Structure
 ```
@@ -33,6 +34,14 @@ emo-rec/
 ├── data/                                     # Downloaded FindingEmo dataset
 │   ├── Run_1/                               # First run of images
 │   └── Run_2/                               # Second run of images
+├── backend/                                  # Flask API serving VEATIC metrics + song recs
+│   ├── app.py
+│   ├── helpers/process_video.py              # VEATIC parquet enrichment + clustering
+│   └── helpers/song_recommendation.py        # Cluster-aware song selection
+├── frontend/                                 # React single-page application
+│   ├── src/App.js                            # VEATIC playback, MAE toggles, cluster canvas
+│   └── src/index.css                         # Styling for the dashboard
+├── run_app.sh                                # Launch script (backend + frontend)
 └── requirements.txt                          # Python dependencies
 ```
 
