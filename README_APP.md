@@ -24,6 +24,9 @@ A ReactJS Flask application that analyzes video emotions and recommends music ba
 - Node.js 16+
 - npm
 
+### Data Setup
+Unzip the data.zip
+
 ### Backend Setup
 
 1. Navigate to the backend directory:

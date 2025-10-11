@@ -166,6 +166,10 @@ cython_debug/
 
 # Data folder — track only the assets required by the backend
 /data/*
+!/data/veatic/shortlisted_videos
+!/data/veatic/shortlisted_videos/*
+!/data/deam/MEMD_audio
+!/data/deam/MEMD_audio/*
 
 models/emonet/evaluation/face_cache
  
