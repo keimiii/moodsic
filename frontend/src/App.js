@@ -299,8 +299,16 @@ function App() {
     
     const resizeCanvas = () => {
       const container = canvas.parentElement;
-      canvas.width = container.clientWidth - 48;
-      canvas.height = container.clientHeight - 48;
+      if (!container) return;
+      const styles = window.getComputedStyle(container);
+      const paddingX =
+        parseFloat(styles.paddingLeft || '0') + parseFloat(styles.paddingRight || '0');
+      const paddingY =
+        parseFloat(styles.paddingTop || '0') + parseFloat(styles.paddingBottom || '0');
+      const width = container.clientWidth - paddingX;
+      const height = container.clientHeight - paddingY;
+      canvas.width = Math.max(width, 0);
+      canvas.height = Math.max(height, 0);
     };
 
     resizeCanvas();
@@ -505,38 +513,42 @@ function App() {
       <div className="viz-panel">
         <div className="viz-container">
           <div className="viz-heading">DEAM dataset: Clusters</div>
-          <canvas ref={canvasRef}></canvas>
-          <div className="axis-labels x-label">Valence (Negative ← → Positive)</div>
-          <div className="axis-labels y-label">Arousal (Calm ← → Excited)</div>
-          {emotionData && (
-            <div className="cluster-overlay">
-              <article className="cluster-card">
-                <span className="cluster-label">Cluster {emotionData.cluster_id}</span>
-                <h3>{clusters[emotionData.cluster_id]?.name || 'Unknown Cluster'}</h3>
-                <p className="cluster-mood">
-                  {clusters[emotionData.cluster_id]?.mood || 'No description available'}
-                </p>
-                <p className="cluster-center">
-                  Center V~{clusters[emotionData.cluster_id]?.center?.valence?.toFixed(2) || '0.00'} | 
-                  A~{clusters[emotionData.cluster_id]?.center?.arousal?.toFixed(2) || '0.00'}
-                </p>
-                <p className="cluster-current">
-                  Fusion V {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)} · 
-                  A {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
-                </p>
-                <ul className="cluster-traits">
-                  {clusters[emotionData.cluster_id]?.traits?.map((trait, index) => (
-                    <li key={index}>{trait}</li>
-                  ))}
-                </ul>
-              </article>
+          <div className="cluster-layout">
+            <div className="cluster-canvas">
+              <canvas ref={canvasRef}></canvas>
+              <div className="axis-labels x-label">Valence (Negative ← → Positive)</div>
+              <div className="axis-labels y-label">Arousal (Calm ← → Excited)</div>
             </div>
-          )}
+            <aside className="cluster-sidebar">
+              {emotionData ? (
+                <article className="cluster-card">
+                  <span className="cluster-label">Cluster {emotionData.cluster_id}</span>
+                  <h3>{clusters[emotionData.cluster_id]?.name || 'Unknown Cluster'}</h3>
+                  <p className="cluster-mood">
+                    {clusters[emotionData.cluster_id]?.mood || 'No description available'}
+                  </p>
+                  <p className="cluster-center">
+                    Center V~{clusters[emotionData.cluster_id]?.center?.valence?.toFixed(2) || '0.00'} | 
+                    A~{clusters[emotionData.cluster_id]?.center?.arousal?.toFixed(2) || '0.00'}
+                  </p>
+                  <ul className="cluster-traits">
+                    {clusters[emotionData.cluster_id]?.traits?.map((trait, index) => (
+                      <li key={index}>{trait}</li>
+                    ))}
+                  </ul>
+                </article>
+              ) : (
+                <div className="cluster-placeholder">
+                  Run an analysis to view cluster descriptors alongside the scatter plot.
+                </div>
+              )}
+            </aside>
+          </div>
         </div>
         <div className="analysis-container">
           <div className="video-info">
             <div className="video-title">
-              {emotionData ? 'Analysis Complete' : 'Video Analysis'}
+              {emotionData ? 'Analysis Results' : 'Video Analysis'}
             </div>
             {emotionData && (
               <div className="model-breakdown">
@@ -624,6 +636,10 @@ function App() {
                     </div>
                   </div>
                 )}
+                <div className="result-comments">
+                  <h4>Comments</h4>
+                  <p>{emotionData.comments || 'No comments available.'}</p>
+                </div>
               </div>
             )}
           </div>

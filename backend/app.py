@@ -93,7 +93,8 @@ def process_video():
             "valence": emotion_result["valence"],
             "arousal": emotion_result["arousal"],
             "cluster_id": emotion_result["cluster_id"],
-            "song": song_recommendation
+            "song": song_recommendation,
+            "comments": "Some sort of comments" # TODO: Generate meaningful comments
         }
         if "mae" in emotion_result:
             result["mae"] = emotion_result["mae"]
