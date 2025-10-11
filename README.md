@@ -171,10 +171,10 @@ If you need a headless OpenCV build for CI, install `opencv-python-headless` via
 
 1. **Metrics and outcomes**
 
-   | Model (Notebook) | Valence MAE ↓ | Arousal MAE ↓ | Average MAE ↓ | Spearman ρ (Val / Aro) | Reference |
-   | --- | --- | --- | --- | --- | --- |
-   | DINOv3 + MLP head (`dinov3_mlp.ipynb`) | 1.1323 | 1.3653 | 1.2488 | 0.6218 / 0.2408 | `docs/Stage III — Training/experiments-log.md:11`-`docs/Stage III — Training/experiments-log.md:18` |
-   | CLIP ViT-B/32 + EmotionHead (`scene_model_training.ipynb`) | 0.5475 | 0.7970 | 0.6722 | 0.3623 / 0.0140 | `docs/Stage III — Training/scene_model_ablation.md:16`-`docs/Stage III — Training/scene_model_ablation.md:25` |
+   | Model (Notebook) | Train Valence MAE ↓ | Test Valence MAE ↓ | Train Arousal MAE ↓ | Test Arousal MAE ↓ | Train Avg MAE ↓ | Test Avg MAE ↓ | Test Spearman ρ (Val / Aro / Avg) | Reference |
+   | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+   | CLIP ViT-B/32 + multi-head aux (`CLIP_ViT-B32_improved_fixed.ipynb`) | 0.3834 | 0.3746 | 0.4519 | 0.4351 | 0.4176 | 0.4048 | 0.6641 / 0.2225 / 0.4433 | `docs/Stage III — Training/scene_model_ablation.md:22`-`docs/Stage III — Training/scene_model_ablation.md:25` |
+   | CLIP ViT-B/32 + linear head (`CLIP_ViT-B32.ipynb`) | 0.3657 | 0.3699 | 0.4394 | 0.4329 | 0.4025 | 0.4014 | 0.6500 / 0.2970 / 0.4735 | `docs/Stage III — Training/scene_model_ablation.md:22`-`docs/Stage III — Training/scene_model_ablation.md:25` |
 
 2. **Rationale for metric selection**
 
@@ -182,7 +182,7 @@ If you need a headless OpenCV build for CI, install `opencv-python-headless` via
 
 3. **Analysis**
 
-   The CLIP EmotionHead reduces average MAE by 46% versus the DINOv3 baseline, indicating that text-aligned CLIP representations capture affective cues more effectively than self-supervised DINOv3 features. The modest decline in Spearman’s ρ reflects the training emphasis on absolute calibration rather than rank correlation; despite this shift, the MAE gains dominate and justify promoting the CLIP configuration. Stratified split caching (13149/1632/1651 images with 703/100/81 skips) ensures these improvements arise from model capacity and regularisation rather than altered data composition (`docs/Stage III — Training/experiments-log.md:23`).
+   CLIP_ViT-B32_improved_fixed keeps MAE within ≈0.003–0.005 of the linear-head baseline while nudging valence ordering to ρ = 0.6641 (+0.014) [docs/Stage III — Training/scene_model_ablation.md:22](docs/Stage%20III%20—%20Training/scene_model_ablation.md#L22)-[docs/Stage III — Training/scene_model_ablation.md:25](docs/Stage%20III%20—%20Training/scene_model_ablation.md#L25). Despite DINOv3's newer self-distillation pipeline, its features stem from label-free invariance objectives and curated image crops, leaving our head to infer affect semantics from scratch; in contrast, CLIP pretrains on 400 M image–text pairs where captions bake in descriptors like "warm sunset" or "tense alley," so its frozen embeddings already align with valence/arousal cues when fine-tuned on the ≈13 k FindingEmo samples ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)). DINOv3's scaled self-supervision emphasises cross-view consistency and smoothness ([arXiv:2304.07193](https://arxiv.org/abs/2304.07193)), which excels at object recognition but can mute color-tone and contextual signals that drive emotional regression, explaining the weaker Spearman lift even with the MLP head. The improved CLIP run further layers dropout and an auxiliary emo8 branch [docs/Stage III — Training/scene_model_ablation.md:11](docs/Stage%20III%20—%20Training/scene_model_ablation.md#L11), pairing with the production-ready checkpoint export [docs/Stage III — Training/scene_model_ablation.md:26](docs/Stage%20III%20—%20Training/scene_model_ablation.md#L26) to deliver more stable optimisation. The simpler linear head remains a strong fallback with marginally lower MAE and higher arousal ranking, echoing the deployment notes captured in [docs/project_overview.md:181](docs/project_overview.md#L181)-[docs/project_overview.md:203](docs/project_overview.md#L203).
 
 ## Overall Performance on Held-Out Dataset (VEATIC)
 
