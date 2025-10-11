@@ -1,229 +1,220 @@
 # Moodsic
 
-Emotion-aware music recommendation prototype powered by a Flask backend, React front-end, and dual-pathway perception stack.
+Emotion-aware music recommendation proof-of-concept that pairs VEATIC video analytics with the DEAM music catalogue. The repository bundles a Flask backend, a React dashboard, dataset preparation scripts, training utilities, and VEATIC evaluation pipelines to support rapid research iteration.
 
-## Installation and Running
+## Installation
 
-### 1. Setup Virtual Environment
+### Python environment
+1. (Optional) Create a virtual environment if `.venv` is missing:
+   ```bash
+   python3 -m venv .venv
+   ```
+2. Activate it before running any Python command:
+   ```bash
+   source .venv/bin/activate.fish
+   ```
+3. Install the core dependencies with `uv`:
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+4. For inference/evaluation tooling install the extra set (includes pyarrow, fastai, etc.):
+   ```bash
+   uv pip install -r requirements_inference.txt
+   ```
+
+### Frontend dependencies
+Install the React dependencies once:
 ```bash
-source .venv/bin/activate.fish  # or your shell's activation command
-uv pip install -r requirements.txt
+cd frontend
+npm install
 ```
 
-### 2. Download Dataset (Optional)
-```bash
-# Fast parallel download of FindingEmo dataset
-python scripts/findingemo_parallel_download.py --workers 100 --timeout 15
+### Dataset setup
+- FindingEmo imagery lives under `data/Run_1` and `data/Run_2`. To re-download:
+  ```bash
+  source .venv/bin/activate.fish
+  python scripts/findingemo_parallel_download.py --target-dir data --workers 100 --timeout 15
+  ```
+- The Flask API expects DEAM audio at `data/DEAM/MEMD_audio/` and VEATIC assets at `data/VEATIC/` (`videos/`, `rating_averaged/`, and `shortlisted_videos/`).
+- Scripts such as `scripts/train_scene_model.py` and `scripts/evaluation/run_inference_pipeline.py` read and write from `data/` and `results/`; keep those directories writable.
 
-# Dataset will be downloaded to data/ directory
-# Contains emotion-labeled images for training/analysis
-```
+## Running the Application
 
-### 3. Run Application
+`run_app.sh` activates the virtualenv (when present), starts the Flask backend (`backend/run.py`), and launches the React development server:
+
 ```bash
 ./run_app.sh
 ```
-This script bootstraps the Flask API (`backend/app.py`) and the React dashboard (`frontend/src/App.js`) so the VEATIC demo, DEAM clusters, and synchronized audio all launch together.
+
+The script assumes you have already run `npm install` in `frontend/`. To start the services manually:
+
+```bash
+source .venv/bin/activate.fish
+python backend/run.py  # http://localhost:5000
+```
+
+```bash
+cd frontend
+npm start  # http://localhost:3000
+```
 
 ## Project Structure
 ```
 emo-rec/
-├── app.py                                    # Main Streamlit web app
-├── scripts/
-│   └── findingemo_parallel_download.py      # Dataset downloader
-├── data/                                     # Downloaded FindingEmo dataset
-│   ├── Run_1/                               # First run of images
-│   └── Run_2/                               # Second run of images
-├── backend/                                  # Flask API serving VEATIC metrics + song recs
+├── README_APP.md                        # Focused app usage guide
+├── backend/                             # Flask API + helpers
 │   ├── app.py
-│   ├── helpers/process_video.py              # VEATIC parquet enrichment + clustering
-│   └── helpers/song_recommendation.py        # Cluster-aware song selection
-├── frontend/                                 # React single-page application
-│   ├── src/App.js                            # VEATIC playback, MAE toggles, cluster canvas
-│   └── src/index.css                         # Styling for the dashboard
-├── run_app.sh                                # Launch script (backend + frontend)
-└── requirements.txt                          # Python dependencies
+│   ├── constants.py
+│   ├── helpers/
+│   └── run.py
+├── configs/                             # YAML configs for training
+│   ├── base_config.yaml
+│   ├── face_models/
+│   └── scene_models/
+├── data/                                # Local datasets (FindingEmo, DEAM, VEATIC, splits)
+├── frontend/                            # React dashboard (src/App.js, styles)
+├── notebooks/                           # Research notebooks + exported artifacts
+├── results/                             # Saved inference/evaluation outputs
+├── scene/                               # Pretrained checkpoints used by the pipelines
+├── scripts/                             # CLI tools (dataset prep, training, evaluation, clustering)
+├── src/                                 # Python package with models/data/utils modules
+├── tests/                               # Pytest suite for fusion + recommendation logic
+├── run_app.sh
+├── requirements.txt
+├── requirements_inference.txt
+└── AGENTS.md
 ```
+
+## Data Assets
+
+- `data/Run_1` and `data/Run_2`: FindingEmo labelled images used by the scene model trainer.
+- `data/VEATIC`: VEATIC videos (`videos/`), evaluation label averages (`rating_averaged/`), and `shortlisted_videos/` clips served by the demo.
+- `data/DEAM`: DEAM audio under `MEMD_audio/` consumed by `GET /api/song/<song_id>`.
+- `results/inference` and `results/evaluation`: Pipeline outputs referenced by the backend (e.g., `pipeline_results_20251006_144126.parquet`) and evaluation notebooks.
 
 ## Scene Model Training
 
-### Prerequisites
-Install all dependencies from requirements.txt:
-```bash
-pip install -r requirements.txt
-```
-
-### Basic Training Command
-```bash
-# Train with CLIP ViT-B/32 backbone (recommended)
-python scripts/train_scene_model.py \
-  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
-  --data.findingemo_path /path/to/your/FindingEmo/dataset
-```
-
-### Configuration Options
-
-#### Available Base Models
-The training script supports multiple backbone architectures:
-
-1. **CLIP Models** (Recommended for scene emotion recognition)
-   - `ViT-B/32` - 512D features, balanced performance/speed
-   - `ViT-B/16` - 512D features, higher resolution
-   - `ViT-L/14` - 768D features, best performance
-   - `RN50` - 1024D features, ResNet-based
-
-2. **DINOv2/DINOv3 Models**
-   - `dinov3_small` - 384D features
-   - `dinov3_base` - 768D features
-   - `dinov3_large` - 1024D features
-
-3. **ImageNet Pretrained Models**
-   - `resnet50` - 2048D features
-   - `resnet18` - 512D features
-
-#### Creating Custom Configuration Files
-
-To train with different base models, create a new YAML config file:
-
-```yaml
-# Example: configs/scene_models/my_custom_config.yaml
-base_config: "../base_config.yaml"
-
-model:
-  model_name: "scene_emotion_my_model"
-  backbone_type: "clip"                    # Options: "clip", "dinov3", "imagenet"
-  clip_model_name: "ViT-L/14"             # For CLIP: "ViT-B/32", "ViT-B/16", "ViT-L/14", "RN50"
-  # backbone_path: "/path/to/dinov3.pth"  # Required for DINOv3
-  # imagenet_backbone_name: "resnet50"    # For ImageNet: "resnet50", "resnet18"
-  
-  feature_dim: 768                         # Must match backbone output dimension
-  freeze_backbone: true                    # Recommended: freeze backbone, train head only
-  
-  head_config:
-    hidden_dims: [256, 128]               # Hidden layer sizes
-    dropout_rate: 0.15                    # Dropout rate
-    activation: "relu"                    # Activation function
-    batch_norm: true                      # Use batch normalization
-
-training:
-  batch_size: 32                          # Adjust based on GPU memory
-  learning_rate: "auto"                   # Auto-detect optimal LR
-  num_epochs: 50                          # Maximum training epochs
-  early_stopping_patience: 10            # Stop if no improvement
-  
-  # Optional: Manual learning rate (instead of "auto")
-  # learning_rate: 0.0001
-```
-
-#### Feature Dimensions by Model
-Make sure `feature_dim` matches your backbone:
-- CLIP ViT-B/32, ViT-B/16: `512`
-- CLIP ViT-L/14: `768`
-- CLIP RN50: `1024`
-- DINOv3 small: `384`
-- DINOv3 base: `768`
-- ResNet50: `2048`
-- ResNet18: `512`
-
-### Training Examples
-
-```bash
-# 1. Basic training with the provided config
-python scripts/train_scene_model.py \
-  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
-  --data.findingemo_path /path/to/FindingEmo
-
-# 2. Custom batch size and epochs
-python scripts/train_scene_model.py \
-  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
-  --data.findingemo_path /path/to/FindingEmo \
-  --training.batch_size 16 \
-  --training.num_epochs 100
-
-# 3. Manual learning rate (disable auto-detection)
-python scripts/train_scene_model.py \
-  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
-  --data.findingemo_path /path/to/FindingEmo \
-  --training.learning_rate 0.0001
-
-# 4. Resume from checkpoint
-python scripts/train_scene_model.py \
-  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
-  --data.findingemo_path /path/to/FindingEmo \
-  --resume experiments/checkpoints/scene_model_clip_vit_b32_frozen/best_model.pth
-```
-
-### Training Output
-The script will:
-- Auto-detect optimal learning rate (if `learning_rate: "auto"`)
-- Train the model with early stopping
-- Save checkpoints to `experiments/checkpoints/`
-- Generate evaluation metrics and visualizations
-- Save training logs to `logs/`
-
-### Common Issues & Solutions
-
-1. **CUDA out of memory**: Reduce `batch_size` in config or via `--training.batch_size 16`
-2. **Constant correlation warnings**: This is normal in early training epochs when model predictions have little variation
-
-## Web Application Features
-- WebRTC camera streaming
-- Real-time video filters
-- Emotion detection interface
-- Fast parallel dataset downloading (25,623 images)
-
-## Linking Fused Valence/Arousal to DEAM Clusters
-
-Use the exported bundle plus ``scripts/clustering/deam_clusters.py`` to convert
-pipeline predictions into DEAM station assignments:
-
-```bash
-python scripts/clustering/deam_clusters.py \
-    --bundle-dir results/clustering/deam_gmm_20251006_151857 \
-    --parquet results/inference/pipeline_results_20251006_144126.parquet \
-    --output results/inference/pipeline_results_20251006_144126_clusters.parquet
-```
-
-The script appends ``deam_component``, ``deam_quadrant``, and per-component
-posterior columns so evaluators can reuse the gating logic without loading the
-original scikit-learn model. Programmatic access is also available via
-``annotate_parquet_with_clusters`` if you prefer to call it from notebooks or
-tests.
-
-## Testing
-
-See Testing.md for full details. Quick start:
+The training CLI lives at `scripts/train_scene_model.py` and relies on YAML configs under `configs/`. Always activate the virtualenv first:
 
 ```bash
 source .venv/bin/activate.fish
-uv pip install pytest opencv-python-headless
+python scripts/train_scene_model.py \
+  --config configs/scene_models/scene_model_clip_vit_b32_frozen_auto_lr_config.yaml \
+  --data.findingemo_path /path/to/FindingEmo
+```
+
+Key notes:
+- Update `data.findingemo_path` either via CLI override (shown above) or by editing the config to point at your local dataset.
+- The provided CLIP ViT-B/32 config inherits from `configs/base_config.yaml` and enables automatic LR discovery, WMSE/CCE losses, and Emo8 auxiliary supervision.
+- Other backbones (DINOv3, pretrained ResNet) are supported by the codebase; create a new YAML file that inherits from `base_config.yaml` and set `model.backbone_type` (`clip`, `dinov3`, or `imagenet`), `model.clip_model_name`, or `model.imagenet_backbone_name` as needed.
+- Use additional CLI overrides such as `--training.batch_size 16` or `--training.learning_rate 0.0001` to experiment without editing the YAML.
+
+Typical outputs land in `experiments/checkpoints/` and `logs/` directories defined in the config.
+
+## Evaluation Pipelines
+
+### Batch VEATIC inference
+The exporter mirrors the research notebook workflow and writes JSON payloads plus a consolidated Parquet file.
+
+```bash
+source .venv/bin/activate.fish
+python scripts/evaluation/run_inference_pipeline.py \
+  --video-dir data/VEATIC/videos \
+  --output-root results/inference \
+  --stabilizer-mode both
+```
+
+Optional flags include `--scene-weight`, `--face-weight`, `--no-variance-weighting`, `--video-limit`, and overlay capture toggles.
+
+### Aggregate metrics
+Summarise a pipeline run into per-video and aggregate CSVs:
+
+```bash
+source .venv/bin/activate.fish
+python scripts/evaluation/aggregate_veatic_metrics.py \
+  results/inference/pipeline_results_20251006_144126.parquet
+```
+
+Outputs default to `results/evaluation/` (CSV + JSON metadata).
+
+### Linking fused valence/arousal to DEAM clusters
+Annotate fused predictions with DEAM GMM assignments:
+
+```bash
+source .venv/bin/activate.fish
+python scripts/clustering/deam_clusters.py \
+  --bundle-dir results/clustering/deam_gmm_20251006_151857 \
+  --parquet results/inference/pipeline_results_20251006_144126.parquet \
+  --output results/inference/pipeline_results_20251006_144126_clusters.parquet
+```
+
+Programmatic access is available by importing `annotate_parquet_with_clusters` from `scripts/clustering/deam_clusters.py`.
+
+## Testing
+
+Pytests cover fusion behaviour, overlay generation, and song matching. Run them from the project root (after installing requirements):
+
+```bash
+source .venv/bin/activate.fish
 pytest -q
 ```
 
-## VEATIC Round I Evaluation
+If you need a headless OpenCV build for CI, install `opencv-python-headless` via `uv pip install "opencv-python-headless==4.12.0.88" --no-deps` and remove the GUI build from `requirements.txt`.
 
-The Round I report at `docs/Stage VI - Evaluation/eval_res_round_i.md` comes from a single VEATIC inference sweep plus an aggregation pass. Re-run the steps below to regenerate every artifact referenced in that summary.
+# Frontend UI
 
-1. **Activate the project environment.**
-   ```bash
-   source .venv/bin/activate.fish
-   uv pip install -r requirements_inference.txt
-   ```
-2. **Stage evaluation assets.** Make sure the VEATIC videos sit under `data/VEATIC/videos`, the averaged label CSVs under `data/VEATIC/rating_averaged/`, the scene checkpoint at `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`, and EmoNet weights under `models/emonet/pretrained/`.
-3. **Export fused predictions (stabilized + raw).** Defaults already match the Round I notebook configuration, so run:
-   ```bash
-   python scripts/evaluation/run_inference_pipeline.py \
-       --video-dir data/VEATIC/videos \
-       --output-root results/inference \
-       --stabilizer-mode both
-   ```
-   This writes `results/inference/pipeline_results_<timestamp>.parquet` plus per-video JSON payloads for both stabilizer settings.
-4. **Aggregate metrics for the report.** Point the aggregator at the Parquet summary from the previous step:
-   ```bash
-   python scripts/evaluation/aggregate_veatic_metrics.py \
-       results/inference/pipeline_results_<timestamp>.parquet
-   ```
-   Outputs land in `results/evaluation/` (per-video CSV, aggregate CSV, and run-parameter JSON sharing the same timestamp).
-5. **Update the markdown.** Rerun analysis or regenerate tables using the CSVs above, then refresh `docs/Stage VI - Evaluation/eval_res_round_i.md` with the new metrics if values change.
+<placeholder>
 
-The defaults already toggle variance-weighted fusion (`SCENE_WEIGHT=0.6`/`FACE_WEIGHT=0.4`), run three MC-dropout passes per pathway, and execute both stabilizer modes in one command, so no additional flags are required unless you are exploring alternative weightings.
+# Evaluation
+
+## Results: Scene Model Ablation
+
+1. **Metrics and outcomes**
+
+   | Model (Notebook) | Valence MAE ↓ | Arousal MAE ↓ | Average MAE ↓ | Spearman ρ (Val / Aro) | Reference |
+   | --- | --- | --- | --- | --- | --- |
+   | DINOv3 + MLP head (`dinov3_mlp.ipynb`) | 1.1323 | 1.3653 | 1.2488 | 0.6218 / 0.2408 | `docs/Stage III — Training/experiments-log.md:11`-`docs/Stage III — Training/experiments-log.md:18` |
+   | CLIP ViT-B/32 + EmotionHead (`scene_model_training.ipynb`) | 0.5475 | 0.7970 | 0.6722 | 0.3623 / 0.0140 | `docs/Stage III — Training/scene_model_ablation.md:16`-`docs/Stage III — Training/scene_model_ablation.md:25` |
+
+2. **Rationale for metric selection**
+
+   Mean Absolute Error (MAE) remains the primary objective because the pipeline must deliver calibrated valence/arousal predictions within the bounded reference space [-1, 1]; MAE is directly interpretable in that scale and resilient to outliers relative to MSE. Spearman’s ρ is reported to assess monotonic ordering, which is pertinent when the downstream fusion layer ranks pathway estimates before weighting them.
+
+3. **Analysis**
+
+   The CLIP EmotionHead reduces average MAE by 46% versus the DINOv3 baseline, indicating that text-aligned CLIP representations capture affective cues more effectively than self-supervised DINOv3 features. The modest decline in Spearman’s ρ reflects the training emphasis on absolute calibration rather than rank correlation; despite this shift, the MAE gains dominate and justify promoting the CLIP configuration. Stratified split caching (13149/1632/1651 images with 703/100/81 skips) ensures these improvements arise from model capacity and regularisation rather than altered data composition (`docs/Stage III — Training/experiments-log.md:23`).
+
+## Overall Performance on Held-Out Dataset (VEATIC)
+
+1. **Metrics and outcomes**
+
+   | Pathway (Stabilized) | Valence MAE ↓ | 95% CI | Arousal MAE ↓ | 95% CI | Coverage Mean | Coverage Std | Reference |
+   | --- | --- | --- | --- | --- | --- | --- | --- |
+   | Face | 0.208 | 0.185–0.234 | 0.168 | 0.148–0.189 | 0.861 | 0.171 | `docs/Stage VI - Evaluation/eval_res_round_i.md:34`-`docs/Stage VI - Evaluation/eval_res_round_i.md:44` |
+   | Scene | 0.238 | 0.210–0.268 | 0.203 | 0.178–0.230 | – | – | `docs/Stage VI - Evaluation/eval_res_round_i.md:34`-`docs/Stage VI - Evaluation/eval_res_round_i.md:46` |
+   | Fusion (scene weight 0.6, face weight 0.4) | 0.193 | 0.169–0.217 | 0.161 | 0.140–0.184 | – | – | `docs/Stage VI - Evaluation/eval_res_round_i.md:34`-`docs/Stage VI - Evaluation/eval_res_round_i.md:46` |
+
+2. **Rationale for metric selection**
+
+   MAE is reported to quantify absolute deviations in the common reference space shared by scene and face pathways, enabling direct comparison across modalities. Confidence intervals communicate statistical stability across the dataset. Coverage is provided for the face pathway because it remains conditioned on successful detections and therefore needs an availability metric alongside accuracy.
+
+3. **Analysis**
+
+   Fusion achieves the lowest MAE on both axes (≈7% lower than face-only and ≈19% lower than scene-only), confirming that variance-weighted blending is superior to single-expert predictions under the current weighting scheme. The near-zero deltas between stabilized and unstabilized runs (≤0.001 MAE change) show that the temporal smoothing window improves user experience without compromising accuracy. Sustained face coverage at 0.861 ± 0.171 indicates that most clips enjoy dual-expert support, explaining why fusion rarely degrades to the less accurate scene-only regime. The archived artefacts (`results/evaluation/veatic_*_20251006_144126.*`) therefore provide a reliable baseline for future weight-sweep experiments without necessitating a fresh inference run.
+
+## Results: Clustering of Music Dataset (DEAM)
+
+1. **Metrics and outcomes**
+
+   | Algorithm | Clusters (excl. noise) | Noise Fraction | Silhouette ↑ | Davies–Bouldin ↓ | Calinski–Harabasz ↑ | Avg. Posterior Entropy ↓ | Weighted Avg. Purity ↑ | Source |
+   | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+   | Gaussian Mixture Model (diag, k=5) | 5 | 0.00% | 0.325 | 0.899 | 1 538.6 | 0.686 | 0.229 | `notebooks/Dataset - DEAM/deam_clustering (des).ipynb` |
+   | HDBSCAN (min_cluster_size=35) | 6 | 59.99% | 0.294 | 0.702 | 615.8 | 1.222 | 0.250 | `notebooks/Dataset - DEAM/deam_clustering (des).ipynb` |
+
+2. **Rationale for metric selection**
+
+   The silhouette coefficient captures cohesion–separation balance, while the Davies–Bouldin index penalises overlapping clusters; together they assess structural quality independent of cluster count. Calinski–Harabasz responds to cluster compactness relative to overall variance, useful for gauging the explanatory power of the latent stations. Posterior entropy and weighted average purity quantify assignment confidence and genre concentration respectively, highlighting whether clusters remain interpretable for recommendation logic. Noise fraction is reported for density-based methods to make the coverage trade-off explicit when large segments of the catalogue remain unclustered.
+
+3. **Analysis**
+
+   The GMM delivers stronger global separation (higher silhouette, lower Davies–Bouldin, and a Calinski–Harabasz score more than twice that of HDBSCAN) while retaining full catalogue coverage. Its lower entropy indicates that posterior assignments are decisive, which simplifies downstream gating. HDBSCAN achieves slightly higher weighted purity within its accepted clusters, implying more genre-homogeneous stations, but this improvement is offset by the 60% noise rate that would require fallback logic for a majority of songs. For the production-facing recommender, the GMM therefore offers a superior balance between coverage, numerical stability, and ease of integration, with HDBSCAN reserved for exploratory analyses where high-confidence islands are preferable to full coverage.
