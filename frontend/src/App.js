@@ -359,7 +359,7 @@ function App() {
             const pointY = ((1 - point.arousal) / 2) * canvas.height;
             
             const isActive = emotionData && emotionData.cluster_id === cluster.id;
-            const alpha = isActive ? 0.9 : 0.03;
+            const alpha = isActive ? 0.6 : 0.03;
             const clusterColour = cluster_colours[clusterIndex % cluster_colours.length];
             
             // Draw each point
@@ -370,29 +370,9 @@ function App() {
           });
         }
 
-        // Draw animated cluster boundary
-        ctx.strokeStyle = emotionData && emotionData.cluster_id === cluster.id 
-          ? 'rgba(255, 255, 255, 0.7)'
-          : 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath();
-        for (let i = 0; i < 50; i++) {
-          const angle = (Math.PI * 2 * i) / 50;
-          const radius = 20 + Math.sin(Date.now() * 0.001 + angle) * 5;
-          const x = centerX + Math.cos(angle) * radius;
-          const y = centerY + Math.sin(angle) * radius;
-          
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.closePath();
-        ctx.stroke();
-
         // Draw cluster center
         if (emotionData && emotionData.cluster_id === cluster.id) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
           ctx.beginPath();
           ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
           ctx.fill();
