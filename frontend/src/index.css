@@ -191,15 +191,38 @@ video {
   color: rgba(255, 255, 255, 0.9);
 }
 
+.mae-value.is-lowest {
+  color: rgba(255, 215, 0, 0.95);
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.35);
+  font-weight: 700;
+}
+
+.mae-card.is-fusion {
+  border-color: rgba(255, 215, 0, 0.85);
+  box-shadow: 0 0 16px rgba(80, 180, 255, 0.3);
+  background: rgba(80, 180, 255, 0.12);
+}
+
+.mae-badge {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 215, 0, 0.85);
+  color: #10162f;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
 .mae-toggle {
   display: inline-flex;
+  gap: 0.25rem;
   border-radius: 999px;
   padding: 0.15rem;
 }
 
 .mae-toggle button {
   border: none;
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -217,22 +240,6 @@ video {
 .mae-toggle button:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
-}
-
-.mae-card.is-best {
-  border-color: rgba(255, 215, 0, 0.7);
-  box-shadow: 0 0 14px rgba(255, 215, 0, 0.25);
-  background: rgba(255, 215, 0, 0.12);
-}
-
-.mae-badge {
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: rgba(255, 215, 0, 0.85);
-  color: #1a1a2e;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
 }
 
 .signal-line {
