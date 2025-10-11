@@ -21,7 +21,7 @@ python scripts/findingemo_parallel_download.py --workers 100 --timeout 15
 
 ### 3. Run Application
 ```bash
-streamlit run app.py
+./run_app.sh
 ```
 
 ## Project Structure
