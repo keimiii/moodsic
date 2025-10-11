@@ -166,19 +166,6 @@ cython_debug/
 
 # Data folder — track only the assets required by the backend
 /data/*
-!/data/.gitkeep
-
-# Allow DEAM audio library
-!/data/deam/
-/data/deam/*
-!/data/deam/MEMD_audio/
-!/data/deam/MEMD_audio/**
-
-# Allow VEATIC video fixtures (case-insensitive compatibility)
-!/data/veatic/
-/data/veatic/*
-!/data/veatic/videos/
-!/data/veatic/videos/**
 
 models/emonet/evaluation/face_cache
  

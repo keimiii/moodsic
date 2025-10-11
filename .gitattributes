@@ -1,2 +1,0 @@
-/data/deam/MEMD_audio/** binary
-/data/veatic/videos/**.mp4 filter=lfs diff=lfs merge=lfs -text
