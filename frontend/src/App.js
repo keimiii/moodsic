@@ -576,7 +576,7 @@ function App() {
                             className={activeMetricView === 'mean' ? 'is-active' : ''}
                             onClick={() => setPathwayMetricView('mean')}
                           >
-                            Mean
+                            Scores
                           </button>
                         </div>
                       )}
