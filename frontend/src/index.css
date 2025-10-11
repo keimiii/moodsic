@@ -85,8 +85,14 @@ video {
   margin-bottom: 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, 2fr);
   gap: 1.1rem;
+}
+
+@media (max-width: 900px) {
+  .model-breakdown {
+    grid-template-columns: 1fr;
+  }
 }
 
 .signal-card {
@@ -120,7 +126,14 @@ video {
 .mae-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mae-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .mae-heading {
@@ -149,6 +162,7 @@ video {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  height: 6rem;
 }
 
 .mae-title {
@@ -175,6 +189,34 @@ video {
 .mae-value {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
+}
+
+.mae-toggle {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 0.15rem;
+}
+
+.mae-toggle button {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mae-toggle button.is-active {
+  background: rgba(255, 255, 255, 0.85);
+  color: #1a1a2e;
+}
+
+.mae-toggle button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
 }
 
 .mae-card.is-best {

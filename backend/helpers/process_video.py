@@ -31,6 +31,11 @@ _MAE_COLUMNS = {
     "face": ("mae_face_valence", "mae_face_arousal"),
     "fusion": ("mae_fusion_valence", "mae_fusion_arousal"),
 }
+_MEAN_COLUMNS = {
+    "scene": ("mean_scene_valence", "mean_scene_arousal"),
+    "face": ("mean_face_valence", "mean_face_arousal"),
+    "fusion": ("mean_fusion_valence", "mean_fusion_arousal"),
+}
 
 
 @lru_cache(maxsize=1)
@@ -165,15 +170,18 @@ def _load_per_video_metrics() -> pl.DataFrame:
     return pl.read_csv(VEATIC_PER_VIDEO_PATH)
 
 
-def _mae_for_video(video_id: str, stabilizer_enabled: bool) -> Dict[str, Dict[str, Optional[float]]]:
+def _pathway_metrics_for_video(
+    video_id: str,
+    stabilizer_enabled: bool,
+) -> Dict[str, Dict[str, Dict[str, Optional[float]]]]:
     try:
         metrics = _load_per_video_metrics()
     except FileNotFoundError:
-        return {}
+        return {"mae": {}, "means": {}}
 
     video_matches = metrics.filter(pl.col("video_id").cast(pl.Utf8) == str(video_id))
     if video_matches.is_empty():
-        return {}
+        return {"mae": {}, "means": {}}
 
     stabilizer_key = str(stabilizer_enabled).lower()
     preferred = video_matches.filter(
@@ -193,13 +201,19 @@ def _mae_for_video(video_id: str, stabilizer_enabled: bool) -> Dict[str, Dict[st
             return None
 
     mae_payload: Dict[str, Dict[str, Optional[float]]] = {}
+    mean_payload: Dict[str, Dict[str, Optional[float]]] = {}
     for pathway, (valence_key, arousal_key) in _MAE_COLUMNS.items():
         mae_payload[pathway] = {
             "valence": _to_float(row.get(valence_key)),
             "arousal": _to_float(row.get(arousal_key)),
         }
+        mean_valence_key, mean_arousal_key = _MEAN_COLUMNS[pathway]
+        mean_payload[pathway] = {
+            "valence": _to_float(row.get(mean_valence_key)),
+            "arousal": _to_float(row.get(mean_arousal_key)),
+        }
 
-    return mae_payload
+    return {"mae": mae_payload, "means": mean_payload}
 
 
 def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
@@ -232,7 +246,7 @@ def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
 
     cluster_id = _predict_cluster(valence, arousal)
     song = _pick_song(cluster_id, valence, arousal)
-    mae_metrics = _mae_for_video(video_id, stabilizer_enabled)
+    pathway_metrics = _pathway_metrics_for_video(video_id, stabilizer_enabled)
 
     result: Dict[str, Any] = {
         "video_name": video_name,
@@ -241,8 +255,10 @@ def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
         "arousal": arousal,
         "cluster_id": cluster_id,
     }
-    if mae_metrics:
-        result["mae"] = mae_metrics
+    if pathway_metrics["mae"]:
+        result["mae"] = pathway_metrics["mae"]
+    if pathway_metrics["means"]:
+        result["pathway_means"] = pathway_metrics["means"]
 
     if song:
         result.update(

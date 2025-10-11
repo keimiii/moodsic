@@ -97,6 +97,8 @@ def process_video():
         }
         if "mae" in emotion_result:
             result["mae"] = emotion_result["mae"]
+        if "pathway_means" in emotion_result:
+            result["pathway_means"] = emotion_result["pathway_means"]
         
         return jsonify(result)
             
