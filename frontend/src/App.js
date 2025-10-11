@@ -14,7 +14,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [pathwayMetricView, setPathwayMetricView] = useState('mae');
+  const [pathwayMetricView, setPathwayMetricView] = useState('mean');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -50,6 +50,7 @@ function App() {
     setSelectedVideo(video);
     setVideoUrl(`/api/video/${video.id}`);
     setEmotionData(null); // Reset emotion data when selecting new video
+    setPathwayMetricView('mean');
     if (audioElement) {
       audioElement.pause();
     }
@@ -231,41 +232,8 @@ function App() {
     return `${prefix}${value.toFixed(2)}`;
   };
 
-  const bestMaePathway = useMemo(() => {
-    if (!emotionData?.mae) {
-      return null;
-    }
-
-    let bestPathway = null;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    ['scene', 'face', 'fusion'].forEach((pathway) => {
-      const metrics = emotionData.mae[pathway];
-      if (!metrics) {
-        return;
-      }
-
-      const scores = [metrics.valence, metrics.arousal].filter(
-        (value) => typeof value === 'number' && Number.isFinite(value)
-      );
-
-      if (!scores.length) {
-        return;
-      }
-
-      const averageMae = scores.reduce((sum, value) => sum + Math.abs(value), 0) / scores.length;
-
-      if (averageMae < bestScore) {
-        bestScore = averageMae;
-        bestPathway = pathway;
-      }
-    });
-
-    return bestPathway;
-  }, [emotionData]);
-
   useEffect(() => {
-    if (pathwayMetricView === 'mean' && !emotionData?.pathway_means) {
+    if (emotionData && pathwayMetricView === 'mean' && !emotionData.pathway_means) {
       setPathwayMetricView('mae');
     }
   }, [emotionData, pathwayMetricView]);
@@ -281,9 +249,42 @@ function App() {
     }
     return emotionData.pathway_means || null;
   }, [emotionData, activeMetricView]);
-  const highlightPathway = activeMetricView === 'mae' ? bestMaePathway : null;
+  const lowestMaePathways = useMemo(() => {
+    if (!emotionData?.mae) {
+      return { valence: null, arousal: null };
+    }
+
+    let lowestValencePathway = null;
+    let lowestValenceScore = Number.POSITIVE_INFINITY;
+    let lowestArousalPathway = null;
+    let lowestArousalScore = Number.POSITIVE_INFINITY;
+
+    ['scene', 'face', 'fusion'].forEach((pathway) => {
+      const metrics = emotionData.mae[pathway];
+      if (!metrics) {
+        return;
+      }
+
+      const { valence, arousal } = metrics;
+
+      if (typeof valence === 'number' && Number.isFinite(valence) && valence < lowestValenceScore) {
+        lowestValenceScore = valence;
+        lowestValencePathway = pathway;
+      }
+
+      if (typeof arousal === 'number' && Number.isFinite(arousal) && arousal < lowestArousalScore) {
+        lowestArousalScore = arousal;
+        lowestArousalPathway = pathway;
+      }
+    });
+
+    return {
+      valence: lowestValencePathway,
+      arousal: lowestArousalPathway,
+    };
+  }, [emotionData]);
   const metricHeading = activeMetricView === 'mae' 
-    ? 'Pathway Mean Average Error' 
+    ? 'Pathway Overall MAE' 
     : 'Pathway Mean Scores';
   const metricSubheading = activeMetricView === 'mae'
     ? 'Valence · Arousal (lower is better)'
@@ -298,8 +299,16 @@ function App() {
     
     const resizeCanvas = () => {
       const container = canvas.parentElement;
-      canvas.width = container.clientWidth - 48;
-      canvas.height = container.clientHeight - 48;
+      if (!container) return;
+      const styles = window.getComputedStyle(container);
+      const paddingX =
+        parseFloat(styles.paddingLeft || '0') + parseFloat(styles.paddingRight || '0');
+      const paddingY =
+        parseFloat(styles.paddingTop || '0') + parseFloat(styles.paddingBottom || '0');
+      const width = container.clientWidth - paddingX;
+      const height = container.clientHeight - paddingY;
+      canvas.width = Math.max(width, 0);
+      canvas.height = Math.max(height, 0);
     };
 
     resizeCanvas();
@@ -350,7 +359,7 @@ function App() {
             const pointY = ((1 - point.arousal) / 2) * canvas.height;
             
             const isActive = emotionData && emotionData.cluster_id === cluster.id;
-            const alpha = isActive ? 0.9 : 0.03;
+            const alpha = isActive ? 0.6 : 0.03;
             const clusterColour = cluster_colours[clusterIndex % cluster_colours.length];
             
             // Draw each point
@@ -361,29 +370,9 @@ function App() {
           });
         }
 
-        // Draw animated cluster boundary
-        ctx.strokeStyle = emotionData && emotionData.cluster_id === cluster.id 
-          ? 'rgba(255, 255, 255, 0.7)'
-          : 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath();
-        for (let i = 0; i < 50; i++) {
-          const angle = (Math.PI * 2 * i) / 50;
-          const radius = 20 + Math.sin(Date.now() * 0.001 + angle) * 5;
-          const x = centerX + Math.cos(angle) * radius;
-          const y = centerY + Math.sin(angle) * radius;
-          
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.closePath();
-        ctx.stroke();
-
         // Draw cluster center
         if (emotionData && emotionData.cluster_id === cluster.id) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
           ctx.beginPath();
           ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
           ctx.fill();
@@ -504,38 +493,42 @@ function App() {
       <div className="viz-panel">
         <div className="viz-container">
           <div className="viz-heading">DEAM dataset: Clusters</div>
-          <canvas ref={canvasRef}></canvas>
-          <div className="axis-labels x-label">Valence (Negative ← → Positive)</div>
-          <div className="axis-labels y-label">Arousal (Calm ← → Excited)</div>
-          {emotionData && (
-            <div className="cluster-overlay">
-              <article className="cluster-card">
-                <span className="cluster-label">Cluster {emotionData.cluster_id}</span>
-                <h3>{clusters[emotionData.cluster_id]?.name || 'Unknown Cluster'}</h3>
-                <p className="cluster-mood">
-                  {clusters[emotionData.cluster_id]?.mood || 'No description available'}
-                </p>
-                <p className="cluster-center">
-                  Center V~{clusters[emotionData.cluster_id]?.center?.valence?.toFixed(2) || '0.00'} | 
-                  A~{clusters[emotionData.cluster_id]?.center?.arousal?.toFixed(2) || '0.00'}
-                </p>
-                <p className="cluster-current">
-                  Fusion V {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)} · 
-                  A {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
-                </p>
-                <ul className="cluster-traits">
-                  {clusters[emotionData.cluster_id]?.traits?.map((trait, index) => (
-                    <li key={index}>{trait}</li>
-                  ))}
-                </ul>
-              </article>
+          <div className="cluster-layout">
+            <div className="cluster-canvas">
+              <canvas ref={canvasRef}></canvas>
+              <div className="axis-labels x-label">Valence (Negative ← → Positive)</div>
+              <div className="axis-labels y-label">Arousal (Calm ← → Excited)</div>
             </div>
-          )}
+            <aside className="cluster-sidebar">
+              {emotionData ? (
+                <article className="cluster-card">
+                  <span className="cluster-label">Cluster {emotionData.cluster_id}</span>
+                  <h3>{clusters[emotionData.cluster_id]?.name || 'Unknown Cluster'}</h3>
+                  <p className="cluster-mood">
+                    {clusters[emotionData.cluster_id]?.mood || 'No description available'}
+                  </p>
+                  <p className="cluster-center">
+                    Center V~{clusters[emotionData.cluster_id]?.center?.valence?.toFixed(2) || '0.00'} | 
+                    A~{clusters[emotionData.cluster_id]?.center?.arousal?.toFixed(2) || '0.00'}
+                  </p>
+                  <ul className="cluster-traits">
+                    {clusters[emotionData.cluster_id]?.traits?.map((trait, index) => (
+                      <li key={index}>{trait}</li>
+                    ))}
+                  </ul>
+                </article>
+              ) : (
+                <div className="cluster-placeholder">
+                  Run an analysis to view cluster descriptors alongside the scatter plot.
+                </div>
+              )}
+            </aside>
+          </div>
         </div>
         <div className="analysis-container">
           <div className="video-info">
             <div className="video-title">
-              {emotionData ? 'Analysis Complete' : 'Video Analysis'}
+              {emotionData ? 'Analysis Results' : 'Video Analysis'}
             </div>
             {emotionData && (
               <div className="model-breakdown">
@@ -566,17 +559,17 @@ function App() {
                         <div className="mae-toggle" role="group" aria-label="Pathway metric view">
                           <button
                             type="button"
-                            className={activeMetricView === 'mae' ? 'is-active' : ''}
-                            onClick={() => setPathwayMetricView('mae')}
-                          >
-                            Error
-                          </button>
-                          <button
-                            type="button"
                             className={activeMetricView === 'mean' ? 'is-active' : ''}
                             onClick={() => setPathwayMetricView('mean')}
                           >
                             Scores
+                          </button>
+                          <button
+                            type="button"
+                            className={activeMetricView === 'mae' ? 'is-active' : ''}
+                            onClick={() => setPathwayMetricView('mae')}
+                          >
+                            MAE
                           </button>
                         </div>
                       )}
@@ -585,24 +578,35 @@ function App() {
                       {['scene', 'face', 'fusion'].map((pathway) => {
                         const metrics = activePathwayMetrics?.[pathway] || {};
                         const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                        const isLowestValence =
+                          activeMetricView === 'mae' && lowestMaePathways.valence === pathway;
+                        const isLowestArousal =
+                          activeMetricView === 'mae' && lowestMaePathways.arousal === pathway;
+                        const isFusionPathway = pathway === 'fusion';
+                        const cardClasses = ['mae-card'];
+                        if (activeMetricView === 'mean' && isFusionPathway) {
+                          cardClasses.push('is-fusion');
+                        }
                         return (
                           <article
                             key={pathway}
-                            className={`mae-card${pathway === highlightPathway ? ' is-best' : ''}`}
+                            className={cardClasses.join(' ')}
                           >
                             <header className="mae-title">
                               <span>{title}</span>
-                              {pathway === highlightPathway && <span className="mae-badge">Lead</span>}
+                              {activeMetricView === 'mean' && isFusionPathway && (
+                                <span className="mae-badge">LEAD</span>
+                              )}
                             </header>
                             <div className="mae-row">
                               <span className="mae-label">Val</span>
-                              <span className="mae-value">
+                              <span className={`mae-value${isLowestValence ? ' is-lowest' : ''}`}>
                                 {formatPathwayValue(metrics.valence, activeMetricView)}
                               </span>
                             </div>
                             <div className="mae-row">
                               <span className="mae-label">Aro</span>
-                              <span className="mae-value">
+                              <span className={`mae-value${isLowestArousal ? ' is-lowest' : ''}`}>
                                 {formatPathwayValue(metrics.arousal, activeMetricView)}
                               </span>
                             </div>
@@ -612,6 +616,10 @@ function App() {
                     </div>
                   </div>
                 )}
+                <div className="result-comments">
+                  <h4>Comments</h4>
+                  <p>{emotionData.comments || 'No comments available.'}</p>
+                </div>
               </div>
             )}
           </div>

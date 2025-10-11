@@ -52,7 +52,7 @@ def get_video(video_id):
     Serve video file for a given video ID
     """
     try:
-        video_path = Path(f"../data/VEATIC/videos/{video_id}.mp4")
+        video_path = Path(f"../data/veatic/shortlisted_videos/{video_id}.mp4")
         if video_path.exists():
             return send_file(str(video_path), as_attachment=False)
         else:
@@ -93,7 +93,8 @@ def process_video():
             "valence": emotion_result["valence"],
             "arousal": emotion_result["arousal"],
             "cluster_id": emotion_result["cluster_id"],
-            "song": song_recommendation
+            "song": song_recommendation,
+            "comments": "Some sort of comments" # TODO: Generate meaningful comments
         }
         if "mae" in emotion_result:
             result["mae"] = emotion_result["mae"]
