@@ -164,12 +164,24 @@ cython_debug/
 # macOS
 .DS_Store
 
-# Data folder — track only the assets required by the backend
+# Data folder — ignore everything by default
 /data/*
-!/data/veatic/shortlisted_videos
-!/data/veatic/shortlisted_videos/*
-!/data/deam/MEMD_audio
-!/data/deam/MEMD_audio/*
+
+# Allow shortlisted videos (case-insensitive folder handling)
+!/data/veatic/
+!/data/VEATIC/
+/data/veatic/*
+/data/VEATIC/*
+!/data/veatic/shortlisted_videos/
+!/data/VEATIC/shortlisted_videos/
+!/data/veatic/shortlisted_videos/**
+!/data/VEATIC/shortlisted_videos/**
+
+# Allow DEAM MEMD audio
+!/data/deam/
+/data/deam/*
+!/data/deam/MEMD_audio/
+!/data/deam/MEMD_audio/**
 
 models/emonet/evaluation/face_cache
  
