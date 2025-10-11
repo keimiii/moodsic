@@ -428,69 +428,45 @@ function App() {
               </div>
             )}
           </div>
-          <div className="video-info">
-            <div className="video-title">
-              {emotionData ? 'Analysis Complete' : 'Video Analysis'}
-            </div>
-            {emotionData && (
-              <div className="model-breakdown">
-                <article className="signal-card">
-                  <header className="signal-title">Fusion Output</header>
-                  <div className="signal-line">
-                    <span className="signal-label">Valence</span>
-                    <span className="signal-value">
-                      {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)}
-                    </span>
+          <div className={`radio-container${currentSong ? '' : ' is-empty'}`}>
+            {currentSong ? (
+              <>
+                <div className="radio-main">
+                  <div className="album-art"></div>
+                  <div className="track-info">
+                    <div className="track-title">{currentSong.title}</div>
+                    <div className="track-artist">{currentSong.artist}</div>
+                    <div className="station">Station: Scene → DEAM Match</div>
                   </div>
-                  <div className="signal-line">
-                    <span className="signal-label">Arousal</span>
-                    <span className="signal-value">
-                      {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
-                    </span>
+                  <div className="equalizer" aria-hidden="true">
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
                   </div>
-                  <div className="signal-status">Variance-weighted</div>
-                </article>
-                {emotionData.mae && (
-                  <div className="mae-metrics">
-                    <div className="mae-header">
-                      <span className="mae-heading">Pathway MAE</span>
-                      <span className="mae-subheading">Valence · Arousal</span>
-                    </div>
-                    <div className="mae-grid">
-                      {['scene', 'face', 'fusion'].map((pathway) => {
-                        const metrics = emotionData.mae[pathway] || {};
-                        const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
-                        return (
-                          <article
-                            key={pathway}
-                            className={`mae-card${pathway === bestMaePathway ? ' is-best' : ''}`}
-                          >
-                            <header className="mae-title">
-                              <span>{title}</span>
-                              {pathway === bestMaePathway && <span className="mae-badge">Lead</span>}
-                            </header>
-                            <div className="mae-row">
-                              <span className="mae-label">Val</span>
-                              <span className="mae-value">{formatMae(metrics.valence)}</span>
-                            </div>
-                            <div className="mae-row">
-                              <span className="mae-label">Aro</span>
-                              <span className="mae-value">{formatMae(metrics.arousal)}</span>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                </div>
+                <div className="progress">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+                <div className="timecodes">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+                <div className="controls" style={{ marginTop: '1rem' }}>
+                  <button onClick={togglePlayPause}>
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="radio-placeholder">
+                Run an analysis to unlock a music match.
               </div>
             )}
-            <div className="video-description">
-              {emotionData 
-                ? `Analysis complete. Valence: ${emotionData.valence.toFixed(2)}, Arousal: ${emotionData.arousal.toFixed(2)}`
-                : 'Select a video to analyze emotions and get music recommendations.'
-              }
-            </div>
           </div>
         </div>
       </div>
@@ -526,41 +502,66 @@ function App() {
             </div>
           )}
         </div>
-        
-        {currentSong && (
-          <div className="radio-container">
-            <div className="radio-main">
-              <div className="album-art"></div>
-              <div className="track-info">
-                <div className="track-title">{currentSong.title}</div>
-                <div className="track-artist">{currentSong.artist}</div>
-                <div className="station">Station: Scene → DEAM Match</div>
+        <div className="analysis-container">
+          <div className="video-info">
+            <div className="video-title">
+              {emotionData ? 'Analysis Complete' : 'Video Analysis'}
+            </div>
+            {emotionData && (
+              <div className="model-breakdown">
+                <article className="signal-card">
+                  <header className="signal-title">Fusion Output</header>
+                  <div className="signal-line">
+                    <span className="signal-label">Valence</span>
+                    <span className="signal-value">
+                      {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="signal-line">
+                    <span className="signal-label">Arousal</span>
+                    <span className="signal-value">
+                      {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="signal-status">Variance-weighted</div>
+                </article>
+                {emotionData.mae && (
+                  <div className="mae-metrics">
+                    <div className="mae-header">
+                      <span className="mae-heading">Pathway Mean Average Error</span>
+                      <span className="mae-subheading">Valence · Arousal</span>
+                    </div>
+                    <div className="mae-grid">
+                      {['scene', 'face', 'fusion'].map((pathway) => {
+                        const metrics = emotionData.mae[pathway] || {};
+                        const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                        return (
+                          <article
+                            key={pathway}
+                            className={`mae-card${pathway === bestMaePathway ? ' is-best' : ''}`}
+                          >
+                            <header className="mae-title">
+                              <span>{title}</span>
+                              {pathway === bestMaePathway && <span className="mae-badge">Lead</span>}
+                            </header>
+                            <div className="mae-row">
+                              <span className="mae-label">Val</span>
+                              <span className="mae-value">{formatMae(metrics.valence)}</span>
+                            </div>
+                            <div className="mae-row">
+                              <span className="mae-label">Aro</span>
+                              <span className="mae-value">{formatMae(metrics.arousal)}</span>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="equalizer" aria-hidden="true">
-                <div className="bar"></div>
-                <div className="bar"></div>
-                <div className="bar"></div>
-              </div>
-            </div>
-            <div className="progress">
-              <div 
-                className="progress-fill" 
-                style={{ 
-                  width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` 
-                }}
-              ></div>
-            </div>
-            <div className="timecodes">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-            <div className="controls" style={{ marginTop: '1rem' }}>
-              <button onClick={togglePlayPause}>
-                {isPlaying ? 'Pause' : 'Play'}
-              </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

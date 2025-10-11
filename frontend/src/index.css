@@ -69,7 +69,7 @@ video {
 }
 
 .video-info {
-  margin-top: 1rem;
+  margin-top: 0;
 }
 
 .video-title {
@@ -499,14 +499,46 @@ h1 {
 }
 
 /* Radio station UI */
-.radio-container {
+.analysis-container {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.analysis-container .video-info {
   margin-top: 0;
+}
+
+.radio-container {
+  margin-top: 1.25rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 1rem 1.25rem;
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.radio-container.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.radio-placeholder {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: inherit;
+  max-width: 18rem;
 }
 
 .radio-main {
