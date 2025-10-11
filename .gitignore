@@ -164,8 +164,10 @@ cython_debug/
 # macOS
 .DS_Store
 
-# Data folder (only top-level)
+# Data folder (only top-level), allow subfolders /deam and /veatic to be tracked
 /data/
+!/data/deam/
+!/data/veatic/
 
 models/emonet/evaluation/face_cache
  
