@@ -315,6 +315,9 @@ function App() {
     window.addEventListener('resize', resizeCanvas);
 
     const animate = () => {
+      const time = performance.now() * 0.0035;
+      const pointPulse = 0.5 + 0.35 * Math.sin(time);
+
       ctx.fillStyle = 'rgba(15, 15, 35, 0.1)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
@@ -359,22 +362,43 @@ function App() {
             const pointY = ((1 - point.arousal) / 2) * canvas.height;
             
             const isActive = emotionData && emotionData.cluster_id === cluster.id;
-            const alpha = isActive ? 0.6 : 0.03;
+            const alpha = isActive ? 0.1 : 0.05;
             const clusterColour = cluster_colours[clusterIndex % cluster_colours.length];
+
+            if (isActive) {
+              ctx.save();
+              ctx.globalCompositeOperation = 'lighter';
+              ctx.shadowBlur = 2 + 2 * pointPulse;
+              ctx.beginPath();
+              ctx.arc(pointX, pointY, 0.1 + 1.9 * pointPulse, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
             
             // Draw each point
             ctx.fillStyle = `rgba(${clusterColour}, ${alpha})`;
             ctx.beginPath();
-            ctx.arc(pointX, pointY, 2, 0, Math.PI * 2);
+            ctx.arc(pointX, pointY, isActive ? 2.5 : 2, 0, Math.PI * 2);
             ctx.fill();
           });
         }
 
         // Draw cluster center
         if (emotionData && emotionData.cluster_id === cluster.id) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+          const centerPulse = 0.55 + 0.28 * Math.sin(time * 0.75);
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.shadowBlur = 12 + 6 * centerPulse;
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.22)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
           ctx.beginPath();
-          ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+          ctx.arc(centerX, centerY, 6.2 + 1.2 * centerPulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 4.8, 0, Math.PI * 2);
           ctx.fill();
         }
       });
