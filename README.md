@@ -20,6 +20,7 @@ python scripts/findingemo_parallel_download.py --workers 100 --timeout 15
 ```
 
 ### 3. Run Application
+Ensure that Docker is running in the background.
 ```bash
 ./run_app.sh
 ```

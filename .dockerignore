@@ -1,0 +1,12 @@
+.git
+.gitignore
+Dockerfile*
+docker-compose.yml
+frontend/node_modules
+backend/__pycache__
+__pycache__
+*.pyc
+.env
+README*.md
+run_app.sh
+data/VEATIC/videos
