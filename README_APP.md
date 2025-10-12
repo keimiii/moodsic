@@ -66,6 +66,22 @@ Unzip the data.zip
 
    The frontend will be available at `http://localhost:3000`
 
+### Docker (Backend + Frontend)
+
+1. Build the containers:
+   ```bash
+   docker compose build
+   ```
+
+2. Start both services:
+   ```bash
+   docker compose up
+   ```
+
+   The React frontend will be available at `http://localhost:3000` and will proxy API calls to the Flask backend running inside the compose network on port `5000`.
+
+> **Note:** The compose setup mounts the local `data/` and `results/` directories into the backend container so it can access media assets and inference artifacts. Ensure those folders exist before starting the stack.
+
 ## Usage
 
 1. Open your browser and go to `http://localhost:3000`
@@ -131,4 +147,3 @@ Todos:
 - [x] Play music with video
 - [x] Analysis (face, scenes, fusion - see which one is used!)
 - [ ] Display both clusters (GMM and HDBSCAN, can toggle)
-
