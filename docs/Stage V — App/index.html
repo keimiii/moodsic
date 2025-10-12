@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Scene Valence-Arousal Clustering</title>
-    <!-- Note: For the academic POC, DEAM retrieval is song-level using
-         simple k-NN with optional GMM (K≈5, diag) station gating learned on
-         song-level static annotations. This visualization uses synthetic
-         clusters; wire to the notebook's GMM artifacts to reflect real centers
-         and covariances. -->
+    <!-- Live demo note: The shipped experience now runs as a React SPA
+         (frontend/src/App.js) backed by Flask endpoints (backend/app.py) and
+         Polars helpers. This static HTML stays as a design reference. -->
+    <!-- Runtime status: DEAM cluster points stream from
+         notebooks/Dataset - DEAM/artifacts/deam_gmm/deam_with_clusters.csv and
+         the React layer surfaces VEATIC playback, synchronized audio, MAE
+         metrics, and comments exactly as spec'd here. -->
     <style>
         * {
             margin: 0;

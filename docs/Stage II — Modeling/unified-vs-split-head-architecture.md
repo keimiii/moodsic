@@ -7,7 +7,7 @@ In emotion recognition for continuous valence-arousal prediction, the regression
 1. **Unified Head**: Single output layer producing both valence and arousal jointly
 2. **Split Head**: Separate, independent output layers for valence and arousal
 
-This analysis is grounded in the empirical context of the EmoRec project, which uses CLIP ViT-B/32 features with MC Dropout for uncertainty estimation on FindingEmo and VEATIC datasets.
+This analysis is grounded in the empirical context of the Moodsic project, which uses CLIP ViT-B/32 features with MC Dropout for uncertainty estimation on FindingEmo and VEATIC datasets.
 
 ---
 
@@ -280,7 +280,7 @@ def predict_with_uncertainty(model, x, n_samples=10):
 
 ---
 
-## Empirical Considerations for EmoRec Project
+## Empirical Considerations for Moodsic Project
 
 ### Dataset Characteristics
 
@@ -431,6 +431,6 @@ def _maybe_load_weights(self, ckpt_path):
 
 ## Conclusion
 
-For the EmoRec project, the **unified head architecture is the evidence-based choice**. It leverages proven empirical performance, aligns with dataset characteristics (small sample size, correlated targets), and maintains compatibility with MC Dropout uncertainty estimation. The split-head design offers modularity but sacrifices sample efficiency and correlation modeling without demonstrated gains—trade-offs that don't justify abandoning a validated architecture in a time-constrained POC.
+For the Moodsic project, the **unified head architecture is the evidence-based choice**. It leverages proven empirical performance, aligns with dataset characteristics (small sample size, correlated targets), and maintains compatibility with MC Dropout uncertainty estimation. The split-head design offers modularity but sacrifices sample efficiency and correlation modeling without demonstrated gains—trade-offs that don't justify abandoning a validated architecture in a time-constrained POC.
 
 **Next Action**: Modify `clip_vit_scene_adapter.py` to use unified head, load the existing `clip_vit-b32_model_improved_learner.pkl` checkpoint, and validate deterministic inference on VEATIC.
