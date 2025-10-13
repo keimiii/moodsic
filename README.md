@@ -2,6 +2,10 @@
 
 Emotion-aware music recommendation proof-of-concept that pairs VEATIC video analytics with the DEAM music catalogue. The repository bundles a Flask backend, a React dashboard, dataset preparation scripts, training utilities, and VEATIC evaluation pipelines to support rapid research iteration.
 
+## Documentation
+
+- [App usage guide](docs/README_APP.md)
+
 ## Installation
 
 ### Python environment
@@ -63,7 +67,6 @@ npm start  # http://localhost:3000
 ## Project Structure
 ```
 emo-rec/
-├── README_APP.md                        # Focused app usage guide
 ├── backend/                             # Flask API + helpers
 │   ├── app.py
 │   ├── constants.py
@@ -74,6 +77,8 @@ emo-rec/
 │   ├── face_models/
 │   └── scene_models/
 ├── data/                                # Local datasets (FindingEmo, DEAM, VEATIC, splits)
+├── docs/                                # Extended guides and research notes
+│   └── README_APP.md                    # Focused app usage guide
 ├── frontend/                            # React dashboard (src/App.js, styles)
 ├── notebooks/                           # Research notebooks + exported artifacts
 ├── results/                             # Saved inference/evaluation outputs
