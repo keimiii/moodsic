@@ -3,20 +3,19 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from math import sqrt
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import polars as pl
 
+from constants import (
+    DEAM_CLUSTERED_CATALOG_PATH,
+    PIPELINE_RESULTS_ENRICHED_PATH,
+    PIPELINE_RESULTS_PATH,
+    VEATIC_PER_VIDEO_PATH,
+)
+
 LOGGER = logging.getLogger(__name__)
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-PIPELINE_RESULTS_PATH = REPO_ROOT / "results/inference/pipeline_results_20251006_144126.parquet"
-SONG_CLUSTER_PATH = REPO_ROOT / "notebooks/Dataset - DEAM/artifacts/deam_gmm/deam_gmm_clusters.csv"
-ENRICHED_PARQUET_PATH = PIPELINE_RESULTS_PATH.with_name(
-    f"{PIPELINE_RESULTS_PATH.stem}_enriched{PIPELINE_RESULTS_PATH.suffix}"
-)
-VEATIC_PER_VIDEO_PATH = REPO_ROOT / "results/evaluation/veatic_per_video_20251006_144126.csv"
 DEFAULT_STABILIZER = False
 
 _REQUIRED_PIPELINE_COLUMNS = [
@@ -49,11 +48,11 @@ def _load_pipeline_records() -> pl.DataFrame:
 
 @lru_cache(maxsize=1)
 def _load_song_catalog() -> pl.DataFrame:
-    if not SONG_CLUSTER_PATH.exists():
+    if not DEAM_CLUSTERED_CATALOG_PATH.exists():
         raise FileNotFoundError(
-            f"Clustered DEAM catalog not found at {SONG_CLUSTER_PATH}"
+            f"Clustered DEAM catalog not found at {DEAM_CLUSTERED_CATALOG_PATH}"
         )
-    return pl.read_csv(SONG_CLUSTER_PATH)
+    return pl.read_csv(DEAM_CLUSTERED_CATALOG_PATH)
 
 
 @lru_cache(maxsize=1)
@@ -113,7 +112,7 @@ def _pick_song(cluster_id: int, valence: float, arousal: float) -> Dict[str, Any
 
 
 def _maybe_write_enriched_index() -> None:
-    if ENRICHED_PARQUET_PATH.exists():
+    if PIPELINE_RESULTS_ENRICHED_PATH.exists():
         return
 
     try:
@@ -157,8 +156,9 @@ def _maybe_write_enriched_index() -> None:
         })
 
     enriched = pl.DataFrame(enrichment_rows)
-    enriched.write_parquet(ENRICHED_PARQUET_PATH)
-    LOGGER.info("Wrote enriched pipeline index to %s", ENRICHED_PARQUET_PATH)
+    PIPELINE_RESULTS_ENRICHED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    enriched.write_parquet(PIPELINE_RESULTS_ENRICHED_PATH)
+    LOGGER.info("Wrote enriched pipeline index to %s", PIPELINE_RESULTS_ENRICHED_PATH)
 
 
 @lru_cache(maxsize=1)

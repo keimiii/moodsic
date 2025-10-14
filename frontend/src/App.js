@@ -2,6 +2,14 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import './index.css';
 
+const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
+const apiClient = axios.create({
+  baseURL: API_BASE_URL || undefined,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 function App() {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
@@ -28,27 +36,29 @@ function App() {
   // Load clusters from backend
   const loadClusters = async () => {
     try {
-      const response = await axios.get('/api/clusters');
-      setClusters(response.data);
+      const response = await apiClient.get('/api/clusters');
+      setClusters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error loading clusters:', error);
+      setClusters([]);
     }
   };
 
   // Load videos from backend
   const loadVideos = async () => {
     try {
-      const response = await axios.get('/api/videos');
-      setVideos(response.data);
+      const response = await apiClient.get('/api/videos');
+      setVideos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error loading videos:', error);
+      setVideos([]);
     }
   };
 
   // Handle video selection
   const handleVideoSelect = (video) => {
     setSelectedVideo(video);
-    setVideoUrl(`/api/video/${video.id}`);
+    setVideoUrl(`${API_BASE_URL}/api/video/${video.id}`);
     setEmotionData(null); // Reset emotion data when selecting new video
     setPathwayMetricView('mean');
     if (audioElement) {
@@ -70,12 +80,8 @@ function App() {
 
     setIsProcessing(true);
     try {
-      const response = await axios.post('/api/process-video', {
+      const response = await apiClient.post('/api/process-video', {
         video_id: selectedVideo.id
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       setEmotionData(response.data);
@@ -97,7 +103,7 @@ function App() {
       audioElement.pause();
     }
 
-    const audio = new Audio(`/api/song/${song.song_id}`);
+    const audio = new Audio(`${API_BASE_URL}/api/song/${song.song_id}`);
     audio.addEventListener('loadedmetadata', () => {
       setDuration(audio.duration);
     });

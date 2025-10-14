@@ -1,7 +1,23 @@
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CLUSTERS_CSV_PATH = BASE_DIR / "notebooks/Dataset - DEAM/artifacts/deam_gmm/deam_with_clusters.csv"
+BACKEND_DIR = Path(__file__).resolve().parent
+DATA_DIR = BACKEND_DIR / "data"
+VIDEO_ASSETS_DIR = DATA_DIR / "veatic" / "shortlisted_videos"
+DEAM_AUDIO_DIR = DATA_DIR / "deam" / "MEMD_audio"
+
+RESULTS_DIR = DATA_DIR / "results"
+INFERENCE_RESULTS_DIR = RESULTS_DIR / "inference"
+EVALUATION_RESULTS_DIR = RESULTS_DIR / "evaluation"
+ARTIFACTS_DIR = DATA_DIR / "artifacts"
+DEAM_GMM_ARTIFACTS_DIR = ARTIFACTS_DIR / "deam_gmm"
+
+CLUSTERS_CSV_PATH = DEAM_GMM_ARTIFACTS_DIR / "deam_with_clusters.csv"
+PIPELINE_RESULTS_PATH = INFERENCE_RESULTS_DIR / "pipeline_results_20251006_144126.parquet"
+PIPELINE_RESULTS_ENRICHED_PATH = INFERENCE_RESULTS_DIR / "pipeline_results_20251006_144126_enriched.parquet"
+VEATIC_PER_VIDEO_PATH = EVALUATION_RESULTS_DIR / "veatic_per_video_20251006_144126.csv"
+DEAM_CLUSTERED_CATALOG_PATH = DEAM_GMM_ARTIFACTS_DIR / "deam_gmm_clusters.csv"
+
 CLUSTER_METADATA = {
     0: {
         "name": "Cluster 0 - High Valence, High Arousal",
