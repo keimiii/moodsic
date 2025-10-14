@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import './index.css';
 
-const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
-const apiClient = axios.create({
-  baseURL: API_BASE_URL || undefined,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const runtimeConfig = typeof window !== 'undefined' ? window.__RUNTIME_CONFIG__ : undefined;
+const API_BASE_URL = ((runtimeConfig && runtimeConfig.API_BASE_URL) || process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
+const createApiClient = () =>
+  axios.create({
+    baseURL: API_BASE_URL || undefined,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
 function App() {
   const [videos, setVideos] = useState([]);
@@ -26,15 +28,19 @@ function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const isWarmingUpRef = useRef(false);
 
-  // Load clusters and videos on component mount
-  useEffect(() => {
-    loadClusters();
-    loadVideos();
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [isWarmingUp, setIsWarmingUp] = useState(false);
+  const [backendWarmupError, setBackendWarmupError] = useState(null);
+
+  useEffect(() => () => {
+    isMountedRef.current = false;
   }, []);
 
-  // Load clusters from backend
-  const loadClusters = async () => {
+  const loadClusters = useCallback(async () => {
+    const apiClient = createApiClient();
     try {
       const response = await apiClient.get('/api/clusters');
       setClusters(Array.isArray(response.data) ? response.data : []);
@@ -42,10 +48,10 @@ function App() {
       console.error('Error loading clusters:', error);
       setClusters([]);
     }
-  };
+  }, []);
 
-  // Load videos from backend
-  const loadVideos = async () => {
+  const loadVideos = useCallback(async () => {
+    const apiClient = createApiClient();
     try {
       const response = await apiClient.get('/api/videos');
       setVideos(Array.isArray(response.data) ? response.data : []);
@@ -53,7 +59,63 @@ function App() {
       console.error('Error loading videos:', error);
       setVideos([]);
     }
-  };
+  }, []);
+
+  const warmUpBackend = useCallback(async () => {
+    if (isWarmingUpRef.current) {
+      return;
+    }
+
+    isWarmingUpRef.current = true;
+    setIsWarmingUp(true);
+    setBackendWarmupError(null);
+    setIsBackendReady(false);
+
+    const maxAttempts = 6;
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const apiClient = createApiClient();
+          await apiClient.get('/api/health', { timeout: 8000 });
+          if (isMountedRef.current) {
+            setIsBackendReady(true);
+            setBackendWarmupError(null);
+          }
+          return;
+        } catch (error) {
+          if (attempt === maxAttempts) {
+            if (isMountedRef.current) {
+              setBackendWarmupError(
+                'The backend is still starting up. Please try again in a moment.'
+              );
+            }
+            return;
+          }
+          const backoff = Math.min(5000, 500 * 2 ** (attempt - 1));
+          await delay(backoff);
+        }
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsWarmingUp(false);
+      }
+      isWarmingUpRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    warmUpBackend();
+  }, [warmUpBackend]);
+
+  useEffect(() => {
+    if (!isBackendReady) {
+      return;
+    }
+    loadClusters();
+    loadVideos();
+  }, [isBackendReady, loadClusters, loadVideos]);
 
   // Handle video selection
   const handleVideoSelect = (video) => {
@@ -80,6 +142,7 @@ function App() {
 
     setIsProcessing(true);
     try {
+      const apiClient = createApiClient();
       const response = await apiClient.post('/api/process-video', {
         video_id: selectedVideo.id
       });
@@ -421,6 +484,35 @@ function App() {
       }
     };
   }, [clusters, emotionData]);
+
+  if (!isBackendReady) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-card">
+          <h1>Moodsic</h1>
+          <p className="loading-subtitle">
+            Warming up the backend service. This can take a few moments after periods of inactivity.
+          </p>
+          {backendWarmupError ? (
+            <>
+              <p className="loading-error">{backendWarmupError}</p>
+              <div className="loading-actions">
+                <button
+                  type="button"
+                  onClick={warmUpBackend}
+                  disabled={isWarmingUp}
+                >
+                  {isWarmingUp ? 'Retrying…' : 'Try again'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="loading-spinner" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
