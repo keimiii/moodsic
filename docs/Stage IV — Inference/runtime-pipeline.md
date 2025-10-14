@@ -1,9 +1,9 @@
 # Runtime Pipeline
 
-- [ ] Implement PERCEIVE → STABILIZE → MATCH end-to-end
 - [✅] Enable MC Dropout/TT sampling for uncertainty in PERCEIVE
 - [✅] Integrate scene–face fusion with variance-weighted averaging
-- [ ] Wire stabilized outputs into k-NN music retrieval with dwell-time
+- [✅] Serve MATCH recommendations via backend helpers (`backend/helpers/process_video.py`, `backend/helpers/song_recommendation.py`) using the VEATIC parquet exports
+- [ ] Optional: Wire the runtime driver’s stabilized outputs directly into MATCH for live inference (current demo uses pre-generated VEATIC runs)
 
 Extracted from [project_overview.md](file:///Users/desmondchoy/Projects/emo-rec/docs/project_overview.md).
 
@@ -19,7 +19,9 @@ Current status (code):
 - Post-fusion STABILIZE (EMA + uncertainty gating) integrated as an optional component inside fusion — `models/fusion.py`
 - Overlay/debug utilities available — `utils/fusion_overlay.py`
 - Tests cover fusion math, gating, stabilizer behavior, overlay, and retrieval logic — `tests/test_fusion.py`, `tests/test_fusion_overlay.py`, `tests/test_song_matcher.py`
-- MATCH retrieval implemented via `utils/song_matcher.py` (GMM gating + dwell-time); integration with the runtime driver/UI is pending.
+- MATCH retrieval surfaces in two layers:
+  - `utils/song_matcher.py` retains the canonical GMM/dwell implementation for live inference.
+  - `backend/helpers/process_video.py` and `backend/helpers/song_recommendation.py` load the VEATIC parquet exports (`results/inference/pipeline_results_*.parquet`) plus clustered DEAM catalog to return fused metrics, pathway MAE, comments, and songs to the React frontend.
 
 ```
 [RUNTIME INFERENCE PIPELINE]
@@ -74,10 +76,10 @@ Current status (code):
 
 - MATCH (POC)
   - Implemented in `utils/song_matcher.py` as `SongMatcher` with GMM station gating, dwell-time enforcement, and recent-song memory.
+  - Flask backend path: `backend/helpers/process_video.py` loads aggregated VEATIC metrics, infers clusters, and delegates to the same matching logic (`_pick_song`) so the React UI receives fused scores, per-pathway MAE, and song metadata without recomputing inference live.
   - Consumes valence/arousal already in reference space `[-1, 1]`; convert upstream when working directly with FE or DEAM static scales.
   - Optional: widen the candidate set to the top-2 GMM clusters when posterior confidence falls below the configured threshold.
   - Tests: `tests/test_song_matcher.py` covers gating, dwell enforcement, recent-history filtering, and artifact loading.
-  - Status: ready for wiring into the runtime driver/frontends.
 
 ## Runtime Driver (PERCEIVE Orchestrator)
 
@@ -134,12 +136,12 @@ class PerceiveFusionDriver:
     def reset(self) -> None: ...
 ```
 
-Behavior:
-- If `scene_predictor` is None, driver runs face-only and returns face results.
-- If face detection fails on a frame, falls back to scene-only when available.
-- All outputs in reference space `[-1, 1]`. Variances reflect TTA/MC sampling.
-- Throttling via `max_hz` controls how often PERCEIVE is executed; when throttled the driver reuses the last result.
-- Helper functions `perceive_once` and `perceive_video` expose the same wiring for single frames and full videos.
+- Behavior:
+  - If `scene_predictor` is None, driver runs face-only and returns face results.
+  - If face detection fails on a frame, falls back to scene-only when available.
+  - All outputs in reference space `[-1, 1]`. Variances reflect TTA/MC sampling.
+  - Throttling via `max_hz` controls how often PERCEIVE is executed; when throttled the driver reuses the last result.
+  - Helper functions `perceive_once` and `perceive_video` expose the same wiring for single frames and full videos.
 
 Scene model integration (later):
 - Provide a `scene_predictor` implementing
@@ -147,10 +149,13 @@ Scene model integration (later):
 - No changes to the driver or fusion core are required.
 - A reference adapter is available: `models/scene/clip_vit_scene_adapter.py`.
 
+Frontend note:
+- The shipped Flask + React demo does not call the runtime driver live; instead it serves cached VEATIC perception runs from disk for deterministic playback. Use the driver when running new videos or benchmarking on-device.
+
 TODO:
 - [x] Add `utils/runtime_driver.py` with `PerceiveFusionDriver`.
 - [x] Wire `SceneFaceFusion` inside driver (`step()`), pass sampling counts, and expose stabilizer controls.
-- [ ] Connect MATCH (SongMatcher: DEAM scaling + linear-scan k-NN with optional GMM gating) after stabilization.
+- [ ] Optional: connect live MATCH inference (`SongMatcher`) to the driver so the backend can stream real-time recommendations instead of cached VEATIC exports.
 
 References:
 - Fusion core and stabilizer: `models/fusion.py`
@@ -160,4 +165,5 @@ References:
 - Overlay utility: `utils/fusion_overlay.py`
 - Scale alignment utilities: `utils/emotion_scale_aligner.py`
 - Retrieval core: `utils/song_matcher.py`
+- Backend helpers serving the demo: `backend/helpers/process_video.py`, `backend/helpers/song_recommendation.py`
 - Tests: `tests/test_fusion.py`, `tests/test_fusion_overlay.py`, `tests/test_song_matcher.py`

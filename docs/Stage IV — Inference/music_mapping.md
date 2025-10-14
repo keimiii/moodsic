@@ -1,6 +1,6 @@
 ## Music Mapping Status
 
-This document records the current state of music retrieval in the EmoRec POC and
+This document records the current state of music retrieval in the Moodsic POC and
 captures design sketches for the therapeutic roadmap. The goal is to make it
 obvious which behavior is shipping today versus what remains aspirational.
 

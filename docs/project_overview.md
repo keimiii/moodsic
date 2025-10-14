@@ -1,6 +1,6 @@
 # Emotion-Aware Environmental Orchestration: Adaptive Music for Dynamic Spaces — Technical Architecture
 
-**Revision:** Aug 25, 2025  
+**Revision:** Oct 11, 2025  
 **Team:** 4 members (≈40 man-days total)  
 **Course:** NUS MTech in AI Systems
 
@@ -108,8 +108,8 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 
 **Integration status**
 - Runtime helper `perceive_video` samples VEATIC clips at approximately 1 fps by default (`target_sample_fps=1.0`) to align with label cadence and keep fusion outputs manageable; see `docs/Stage IV — Inference/veatic_inference.md` for the full rundown.
-- Fusion guardrails and optional EMA stabilizer follow the demo configuration in `notebooks/e2e_video_to_fusion.ipynb`; enable smoothing when benchmarking jitter-sensitive metrics.
-- Pending: final wiring that aligns sampled frames with VEATIC labels for aggregate MAE/ρ reporting and dashboard visualizations.
+- Fusion guardrails and optional EMA stabilizer follow the demo configuration in `notebooks/Inference/e2e_video_to_fusion.ipynb`; enable smoothing when benchmarking jitter-sensitive metrics.
+- Status: VEATIC MAE aggregation now runs from the pre-generated parquet exports (`results/inference/pipeline_results_*.parquet`), and the dashboard consumes the per-video CSVs surfaced by `scripts/evaluation/aggregate_veatic_metrics.py` via the Flask backend.
 
 **Licensing note**
 - VEATIC is available for research purposes; copyright remains with the original owners of the video content. Redistribution and commercial use are restricted per the project’s terms.
@@ -1048,25 +1048,25 @@ if __name__ == "__main__":
 ## 11. Technical Dependencies
 
 ```python
-# requirements.txt
-transformers==4.35.0     # Pre-trained models
-fastai==2.7.13          # Training framework
-torch==2.0.1            # Deep learning backend
-torchvision==0.15.2     # Vision utilities
-opencv-python==4.8.0    # Video processing
-mediapipe==0.10.0       # Face detection
-scikit-learn==1.3.0     # GMM clustering and metrics
-numpy==1.24.3           # Numerical operations
-pandas==2.0.3           # Data manipulation
-gradio==3.50.0          # Demo interface
-matplotlib==3.7.1       # Visualization
-tqdm==4.65.0           # Progress tracking
+# requirements.txt (notable pins)
+torch>=2.0.1                 # Deep learning backbone for adapters
+transformers>=4.30.0         # CLIP scene adapter
+opencv-python==4.12.0.88     # Video processing + overlays
+mediapipe>=0.10.0            # Face detection
+Flask==2.3.3                 # Demo backend API
+Flask-CORS==4.0.0            # Frontend ↔ backend comms
+polars==1.20.0               # VEATIC parquet/CSV wrangling
+numpy==2.2.6                 # Numerical operations
+scikit-learn==1.3.0          # GMM station gating + metrics
+Pillow==11.3.0               # Static imagery utilities
+tqdm>=4.65.0                 # Progress reporting
 ```
 
-Front-end status: Undecided. Current prototypes use Gradio for quick
-experiments, and the repository also includes a Streamlit/WebRTC app
-(`app.py`) as a primary candidate UI. The final front-end choice is
-to be determined.
+Front-end status: The live demo ships as a Flask API (`backend/app.py`) plus
+a React dashboard (`frontend/src/App.js`) launched together via `./run_app.sh`.
+The earlier Streamlit/WebRTC prototype (`app.py`) has been retired; VEATIC
+playback, synchronized audio, MAE toggles, and cluster overlays now live
+exclusively in the React experience.
 
 ### 11.1 EmoNet Integration and Licensing
 

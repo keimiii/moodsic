@@ -1,4 +1,4 @@
-# EmoRec Project - Agent Guide
+# Moodsic Project - Agent Guide
 
 ## One-Word Commands
 Quick shortcuts for common tasks:
