@@ -69,6 +69,7 @@ The face stream outputs are **strongly negative** (mean valence ≈ -0.19, onl
 ```
 
 Inverse-variance fusion gives extra emphasis to the (over-confident) face stream, so the effective weights skew even more negative than 60/40.
+Post-hoc weight reconstruction from `results/inference/pipeline_results_20251006_144126.parquet` confirms this: across 20 714 frames, 17 972 valence samples used variance-based blending, yielding an average scene contribution of only 0.35 (median ≈ 0.18) versus 0.65 for the face path, while arousal averaged 0.63 scene / 0.37 face. The dominance on valence explains why face bias dictates which clusters remain populated.
 
 ### 3. Compressed Valence Range vs. Ground Truth
 
