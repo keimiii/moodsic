@@ -106,6 +106,8 @@ def process_video():
             result["mae"] = emotion_result["mae"]
         if "pathway_means" in emotion_result:
             result["pathway_means"] = emotion_result["pathway_means"]
+        if "pathway_variances" in emotion_result:
+            result["pathway_variances"] = emotion_result["pathway_variances"]
         
         return jsonify(result)
             

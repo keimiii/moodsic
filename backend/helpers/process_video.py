@@ -35,6 +35,11 @@ _MEAN_COLUMNS = {
     "face": ("mean_face_valence", "mean_face_arousal"),
     "fusion": ("mean_fusion_valence", "mean_fusion_arousal"),
 }
+_VARIANCE_COLUMNS = {
+    "scene": ("var_scene_valence", "var_scene_arousal"),
+    "face": ("var_face_valence", "var_face_arousal"),
+    "fusion": ("var_fusion_valence", "var_fusion_arousal"),
+}
 
 
 @lru_cache(maxsize=1)
@@ -177,11 +182,11 @@ def _pathway_metrics_for_video(
     try:
         metrics = _load_per_video_metrics()
     except FileNotFoundError:
-        return {"mae": {}, "means": {}}
+        return {"mae": {}, "means": {}, "variances": {}}
 
     video_matches = metrics.filter(pl.col("video_id").cast(pl.Utf8) == str(video_id))
     if video_matches.is_empty():
-        return {"mae": {}, "means": {}}
+        return {"mae": {}, "means": {}, "variances": {}}
 
     stabilizer_key = str(stabilizer_enabled).lower()
     preferred = video_matches.filter(
@@ -202,6 +207,7 @@ def _pathway_metrics_for_video(
 
     mae_payload: Dict[str, Dict[str, Optional[float]]] = {}
     mean_payload: Dict[str, Dict[str, Optional[float]]] = {}
+    variance_payload: Dict[str, Dict[str, Optional[float]]] = {}
     for pathway, (valence_key, arousal_key) in _MAE_COLUMNS.items():
         mae_payload[pathway] = {
             "valence": _to_float(row.get(valence_key)),
@@ -212,8 +218,13 @@ def _pathway_metrics_for_video(
             "valence": _to_float(row.get(mean_valence_key)),
             "arousal": _to_float(row.get(mean_arousal_key)),
         }
+        variance_valence_key, variance_arousal_key = _VARIANCE_COLUMNS[pathway]
+        variance_payload[pathway] = {
+            "valence": _to_float(row.get(variance_valence_key)),
+            "arousal": _to_float(row.get(variance_arousal_key)),
+        }
 
-    return {"mae": mae_payload, "means": mean_payload}
+    return {"mae": mae_payload, "means": mean_payload, "variances": variance_payload}
 
 
 def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
@@ -259,6 +270,8 @@ def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
         result["mae"] = pathway_metrics["mae"]
     if pathway_metrics["means"]:
         result["pathway_means"] = pathway_metrics["means"]
+    if pathway_metrics["variances"]:
+        result["pathway_variances"] = pathway_metrics["variances"]
 
     if song:
         result.update(

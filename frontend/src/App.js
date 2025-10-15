@@ -24,7 +24,6 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [pathwayMetricView, setPathwayMetricView] = useState('mean');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -122,7 +121,6 @@ function App() {
     setSelectedVideo(video);
     setVideoUrl(`${API_BASE_URL}/api/video/${video.id}`);
     setEmotionData(null); // Reset emotion data when selecting new video
-    setPathwayMetricView('mean');
     if (audioElement) {
       audioElement.pause();
     }
@@ -301,23 +299,6 @@ function App() {
     return `${prefix}${value.toFixed(2)}`;
   };
 
-  useEffect(() => {
-    if (emotionData && pathwayMetricView === 'mean' && !emotionData.pathway_means) {
-      setPathwayMetricView('mae');
-    }
-  }, [emotionData, pathwayMetricView]);
-
-  const hasPathwayMeans = Boolean(emotionData?.pathway_means);
-  const activeMetricView = hasPathwayMeans ? pathwayMetricView : 'mae';
-  const activePathwayMetrics = useMemo(() => {
-    if (!emotionData) {
-      return null;
-    }
-    if (activeMetricView === 'mae') {
-      return emotionData.mae || null;
-    }
-    return emotionData.pathway_means || null;
-  }, [emotionData, activeMetricView]);
   const lowestMaePathways = useMemo(() => {
     if (!emotionData?.mae) {
       return { valence: null, arousal: null };
@@ -352,12 +333,8 @@ function App() {
       arousal: lowestArousalPathway,
     };
   }, [emotionData]);
-  const metricHeading = activeMetricView === 'mae' 
-    ? 'Pathway Overall MAE' 
-    : 'Pathway Mean Scores';
-  const metricSubheading = activeMetricView === 'mae'
-    ? 'Valence · Arousal (lower is better)'
-    : 'Valence · Arousal (range -1 to +1)';
+  const maeMetrics = emotionData?.mae || null;
+  const pathwayMeans = emotionData?.pathway_means || null;
 
   // Canvas animation
   useEffect(() => {
@@ -650,92 +627,95 @@ function App() {
         <div className="analysis-container">
           <div className="video-info">
             <div className="video-title">
-              {emotionData ? 'Analysis Results' : 'Video Analysis'}
+              {emotionData ? 'Valence (V) / Arousal (A) Analysis Results' : 'Video Analysis'}
             </div>
             {emotionData && (
               <div className="model-breakdown">
-                <article className="signal-card">
-                  <header className="signal-title">Fusion Output</header>
-                  <div className="signal-line">
-                    <span className="signal-label">Valence</span>
-                    <span className="signal-value">
-                      {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="signal-line">
-                    <span className="signal-label">Arousal</span>
-                    <span className="signal-value">
-                      {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="signal-status">Variance-weighted</div>
-                </article>
-                {(emotionData.mae || emotionData.pathway_means) && activePathwayMetrics && (
+                {(maeMetrics || pathwayMeans) && (
                   <div className="mae-metrics">
-                    <div className="mae-header">
-                      <div className="mae-labels">
-                        <span className="mae-heading">{metricHeading}</span>
-                        <span className="mae-subheading">{metricSubheading}</span>
-                      </div>
-                      {hasPathwayMeans && (
-                        <div className="mae-toggle" role="group" aria-label="Pathway metric view">
-                          <button
-                            type="button"
-                            className={activeMetricView === 'mean' ? 'is-active' : ''}
-                            onClick={() => setPathwayMetricView('mean')}
-                          >
-                            Scores
-                          </button>
-                          <button
-                            type="button"
-                            className={activeMetricView === 'mae' ? 'is-active' : ''}
-                            onClick={() => setPathwayMetricView('mae')}
-                          >
-                            MAE
-                          </button>
+                    {maeMetrics && (
+                      <section className="mae-section">
+                        <div className="mae-grid">
+                          <div className="mae-header">
+                            <div className="mae-labels">
+                              <span className="mae-heading">V/A MAE</span>
+                              <span className="mae-subheading">Against held-out dataset</span>
+                            </div>
+                          </div>
+                          {['scene', 'face', 'fusion'].map((pathway) => {
+                            const metrics = maeMetrics?.[pathway] || {};
+                            const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                            const isLowestValence = lowestMaePathways.valence === pathway;
+                            const isLowestArousal = lowestMaePathways.arousal === pathway;
+                            return (
+                              <article
+                                key={`mae-${pathway}`}
+                                className="mae-card"
+                              >
+                                <header className="mae-title">
+                                  <span>{title}</span>
+                                </header>
+                                <div className="mae-row">
+                                  <span className="mae-label">V</span>
+                                  <span className={`mae-value${isLowestValence ? ' is-lowest' : ''}`}>
+                                    {formatPathwayValue(metrics.valence, 'mae')}
+                                  </span>
+                                </div>
+                                <div className="mae-row">
+                                  <span className={`mae-label`}>A</span>
+                                  <span className={`mae-value${isLowestArousal ? ' is-lowest' : ''}`}>
+                                    {formatPathwayValue(metrics.arousal, 'mae')}
+                                  </span>
+                                </div>
+                              </article>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
-                    <div className="mae-grid">
-                      {['scene', 'face', 'fusion'].map((pathway) => {
-                        const metrics = activePathwayMetrics?.[pathway] || {};
-                        const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
-                        const isLowestValence =
-                          activeMetricView === 'mae' && lowestMaePathways.valence === pathway;
-                        const isLowestArousal =
-                          activeMetricView === 'mae' && lowestMaePathways.arousal === pathway;
-                        const isFusionPathway = pathway === 'fusion';
-                        const cardClasses = ['mae-card'];
-                        if (activeMetricView === 'mean' && isFusionPathway) {
-                          cardClasses.push('is-fusion');
-                        }
-                        return (
-                          <article
-                            key={pathway}
-                            className={cardClasses.join(' ')}
-                          >
-                            <header className="mae-title">
-                              <span>{title}</span>
-                              {activeMetricView === 'mean' && isFusionPathway && (
-                                <span className="mae-badge">LEAD</span>
-                              )}
-                            </header>
-                            <div className="mae-row">
-                              <span className="mae-label">Val</span>
-                              <span className={`mae-value${isLowestValence ? ' is-lowest' : ''}`}>
-                                {formatPathwayValue(metrics.valence, activeMetricView)}
-                              </span>
+                      </section>
+                    )}
+                    {pathwayMeans && (
+                      <section className="mae-section">
+                        <div className="mae-grid">
+                          <div className="mae-header">
+                            <div className="mae-labels">
+                              <span className="mae-heading">V/A Output</span>
+                              <span className="mae-subheading">VAR = Variance uncertainty</span>
                             </div>
-                            <div className="mae-row">
-                              <span className="mae-label">Aro</span>
-                              <span className={`mae-value${isLowestArousal ? ' is-lowest' : ''}`}>
-                                {formatPathwayValue(metrics.arousal, activeMetricView)}
-                              </span>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
+                          </div>
+                          {['scene', 'face', 'fusion'].map((pathway) => {
+                            const metrics = pathwayMeans?.[pathway] || {};
+                            const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                            const isFusionPathway = pathway === 'fusion';
+                            const cardClasses = ['mae-card'];
+                            if (isFusionPathway) {
+                              cardClasses.push('is-fusion');
+                            }
+                            return (
+                              <article
+                                key={`mean-${pathway}`}
+                                className={cardClasses.join(' ')}
+                              >
+                                <header className="mae-title">
+                                  <span>{title}</span>
+                                </header>
+                                <div className="mae-row">
+                                  <span className="mae-label">V</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.valence, 'mean')}
+                                  </span>
+                                </div>
+                                <div className="mae-row">
+                                  <span className="mae-label">A</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.arousal, 'mean')}
+                                  </span>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 )}
                 <div className="result-comments">

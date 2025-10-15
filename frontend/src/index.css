@@ -161,7 +161,7 @@ video {
   margin-bottom: 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(300px, 2fr);
+  /* grid-template-columns: minmax(220px, 1fr) minmax(300px, 2fr); */
   gap: 1.1rem;
 }
 
