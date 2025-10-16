@@ -193,7 +193,7 @@ def load_pathway_summary(samples: Mapping[str, object], pathway: str) -> Dict[st
     summary: Dict[str, Optional[float]] = {}
     for metric in METRICS:
         summary[f"mean_{metric}"] = float(block.get(f"mean_{metric}"))
-        summary[f"var_{metric}"] = _safe_float(block.get(f"var_{metric}"))
+        summary[f"var_{metric}"] = _clip_variance(block.get(f"var_{metric}"))
     summary["coverage"] = _safe_float(block.get("coverage"))
     return summary
 
@@ -205,6 +205,50 @@ def _safe_float(value: Optional[float]) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _clip_variance(value: Optional[object]) -> Optional[float]:
+    """
+    Collapse per-frame variance samples into the variance of the clip-level mean.
+
+    When ``value`` is an iterable of per-frame variances, treat the clip statistic as an
+    equally-weighted mean across valid entries. For equal weights ``w_i = 1/n``,
+    the variance of the mean is ``Σ(w_i^2 * var_i) = Σ(var_i) / n²``. Scalar inputs fall
+    back to the regular float coercion path. Negative or non-finite values are ignored.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            coerced = float(value)
+        except (TypeError, ValueError):
+            return None
+        return coerced if math.isfinite(coerced) and coerced >= 0.0 else None
+
+    if isinstance(value, (str, bytes)):
+        return _safe_float(value)
+
+    try:
+        iter_values = list(value)  # type: ignore[arg-type]
+    except TypeError:
+        return _safe_float(value)
+
+    finite_variances: List[float] = []
+    for entry in iter_values:
+        if isinstance(entry, (int, float)):
+            var = float(entry)
+            if math.isfinite(var) and var >= 0.0:
+                finite_variances.append(var)
+
+    if not finite_variances:
+        return None
+
+    n = len(finite_variances)
+    if n == 0:
+        return None
+    weight_sq = (1.0 / n) ** 2
+    total = sum(var * weight_sq for var in finite_variances)
+    return total
 
 
 def summarize_run(
@@ -263,6 +307,15 @@ def build_per_video_rows(
                     row[f"mean_{pathway}_{metric}"] = run_summary["means"][pathway][metric]
                     row[f"mae_{pathway}_{metric}"] = run_summary["metrics"][pathway][metric]
                     row[f"var_{pathway}_{metric}"] = run_summary["variances"][pathway][metric]
+            fused_variances = run_summary["variances"].get("fusion", {})
+            fused_valence_var = fused_variances.get("valence")
+            fused_arousal_var = fused_variances.get("arousal")
+            row["valence_std_dev"] = (
+                math.sqrt(fused_valence_var) if fused_valence_var is not None and fused_valence_var >= 0.0 else None
+            )
+            row["arousal_std_dev"] = (
+                math.sqrt(fused_arousal_var) if fused_arousal_var is not None and fused_arousal_var >= 0.0 else None
+            )
             row["export_timestamp"] = export_timestamp
             run_rows[stabilized_flag] = row
         for metric in METRICS:
@@ -499,6 +552,8 @@ def main() -> None:
             per_video_columns.append(f"mae_{pathway}_{metric}")
         for metric in METRICS:
             per_video_columns.append(f"var_{pathway}_{metric}")
+    per_video_columns.append("valence_std_dev")
+    per_video_columns.append("arousal_std_dev")
     for metric in METRICS:
         per_video_columns.append(f"face_beats_fusion_{metric}")
         per_video_columns.append(f"scene_beats_fusion_{metric}")
