@@ -223,6 +223,7 @@ def _pathway_metrics_for_video(
             "valence": _to_float(row.get(variance_valence_key)),
             "arousal": _to_float(row.get(variance_arousal_key)),
         }
+    print(variance_payload)
 
     return {"mae": mae_payload, "means": mean_payload, "variances": variance_payload}
 

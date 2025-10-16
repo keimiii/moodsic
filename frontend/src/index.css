@@ -238,7 +238,7 @@ video {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  height: 6rem;
+  min-height: 7rem;
 }
 
 .mae-title {

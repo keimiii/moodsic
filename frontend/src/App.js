@@ -292,11 +292,17 @@ function App() {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return '—';
     }
-    if (view === 'mae') {
-      return value.toFixed(3);
+    switch (view) {
+      case 'mae':
+        return value.toFixed(3);
+      case 'variance':
+        return value.toFixed(4);
+      case 'mean':
+      default: {
+        const prefix = value >= 0 ? '+' : '';
+        return `${prefix}${value.toFixed(2)}`;
+      }
     }
-    const prefix = value >= 0 ? '+' : '';
-    return `${prefix}${value.toFixed(2)}`;
   };
 
   const lowestMaePathways = useMemo(() => {
@@ -335,6 +341,7 @@ function App() {
   }, [emotionData]);
   const maeMetrics = emotionData?.mae || null;
   const pathwayMeans = emotionData?.pathway_means || null;
+  const pathwayVariances = emotionData?.pathway_variances || null;
 
   // Canvas animation
   useEffect(() => {
@@ -705,9 +712,21 @@ function App() {
                                   </span>
                                 </div>
                                 <div className="mae-row">
+                                  <span className="mae-label">VAR (V)</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.valence, 'variance')}
+                                  </span>
+                                </div>
+                                <div className="mae-row">
                                   <span className="mae-label">A</span>
                                   <span className="mae-value">
                                     {formatPathwayValue(metrics.arousal, 'mean')}
+                                  </span>
+                                </div>
+                                <div className="mae-row">
+                                  <span className="mae-label">VAR (A)</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.arousal, 'variance')}
                                   </span>
                                 </div>
                               </article>
