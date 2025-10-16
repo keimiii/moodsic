@@ -49,6 +49,7 @@ The aggregate CSV (`results/evaluation/veatic_aggregate_20251006_144126.csv`) re
 
 ## Analysis
 - **Fusion leads both axes**: With `SCENE_WEIGHT=0.6` / `FACE_WEIGHT=0.4`, fusion attains the lowest dataset mean MAE on valence (0.193) and arousal (0.161), beating face-only (0.208/0.168) and scene-only (0.238/0.203).
+- **Variance weighting dominance**: Recomputing per-frame weights from `results/inference/pipeline_results_20251006_144126.parquet` shows 20 714 frames total, with 17 972/17 965 valence/arousal frames using inverse-variance fusion. Scene-only fallbacks covered 2 738 frames, but when both paths were valid the effective valence weights averaged 0.35 scene / 0.65 face (median scene share ≈ 0.18), while arousal favored the scene path at 0.63 scene / 0.37 face (median scene share ≈ 0.73).
 - **Stabilization impact ~zero**: Mean ΔMAE hovers in ±0.0001–0.0007 across pathways/metrics (e.g., fusion valence −0.00056; fusion arousal +0.00028). Medians shift only slightly (e.g., fusion arousal median improves from 0.124 to 0.121).
 - **Pathway ordering**: Fusion < Face < Scene for both valence and arousal means; face coverage remains high and unchanged (≈0.861 ± 0.171).
 - **CIs are tight**: 95% CIs for fusion are narrow (valence 0.169–0.217; arousal 0.140–0.184), suggesting stable performance under current settings.
