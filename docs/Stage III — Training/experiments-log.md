@@ -13,7 +13,7 @@
 | `efficientnet_baseline.ipynb` | Frozen EfficientNet-B0 -> Linear(1280->2) tanh | 1.5471 / 1.4360 / 1.4915 | Underfits; warns on PIL truncation during dataload. |
 | `resnet_baseline.ipynb` | Frozen ResNet-50 -> Linear(2048->2) tanh | 1.4178 / 1.3671 / 1.3925 | Marginally better than EfficientNet; still >1.39 MAE. |
 | `resnet_101.ipynb` | Frozen ResNet-101 -> Linear(2048->2) tanh | 1.4284 / 1.3401 / 1.3842 | Slightly improved arousal MAE; valence stagnates. |
-| `CLIP_ViT-B32.ipynb` | Frozen CLIP ViT-B/32 -> Linear(512->2) tanh | 1.1098 / 1.2988 / 1.2043 | First CLIP baseline; improves ~0.19 avg MAE over ResNet-50. |
+| `CLIP_ViT-B32.ipynb` | Frozen CLIP ViT-B/32 -> Linear(512->2) tanh | 1.1274 / 1.4613 / 1.2942 | First CLIP baseline; improves ~0.10 avg MAE over ResNet-50. |
 | `CLIP_ViT-B32_improved.ipynb` | Frozen CLIP ViT-B/32 -> LN + GELU -> Dropout(0.15) -> 128-d head + aux Emo8 | 1.0684 / 1.2792 / 1.1738 | Auxiliary Emo8 branch + deeper head nets modest gains. |
 | `scene_model_training.ipynb` | Frozen CLIP ViT-B/32 -> EmotionHead (BN + Dropout 0.3) | 0.5475 / 0.7970 / 0.6722 | Stratified loader (`split_indices.json`); largest jump in MAE (-0.50 avg) with stronger head + regularization. |
 
