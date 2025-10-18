@@ -1,11 +1,17 @@
+import os
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from pathlib import Path
 import polars as pl
 
 from helpers.process_video import process_video_for_emotion
 from helpers.song_recommendation import recommend_song
-from constants import CLUSTERS_CSV_PATH, CLUSTER_METADATA
+from constants import (
+    CLUSTERS_CSV_PATH,
+    CLUSTER_METADATA,
+    DEAM_AUDIO_DIR,
+    VIDEO_ASSETS_DIR,
+)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -23,9 +29,7 @@ AVAILABLE_VIDEOS = [
     {"id": "40", "name": "Video 40", "filename": "40.mp4"},
     {"id": "42", "name": "Video 42", "filename": "42.mp4"},
     {"id": "44", "name": "Video 44", "filename": "44.mp4"},
-    {"id": "46", "name": "Video 46", "filename": "46.mp4"},
     {"id": "49", "name": "Video 49", "filename": "49.mp4"},
-    {"id": "51", "name": "Video 51", "filename": "51.mp4"},
     {"id": "53", "name": "Video 53", "filename": "53.mp4"},
     {"id": "55", "name": "Video 55", "filename": "55.mp4"},
     {"id": "60", "name": "Video 60", "filename": "60.mp4"},
@@ -52,7 +56,7 @@ def get_video(video_id):
     Serve video file for a given video ID
     """
     try:
-        video_path = Path(f"../data/veatic/shortlisted_videos/{video_id}.mp4")
+        video_path = VIDEO_ASSETS_DIR / f"{video_id}.mp4"
         if video_path.exists():
             return send_file(str(video_path), as_attachment=False)
         else:
@@ -77,7 +81,7 @@ def process_video():
         if video_id not in valid_videos:
             return jsonify({'error': 'Invalid video ID'}), 400
         
-        # Process video for emotion (placeholder implementation)
+        # Process video for emotion analysis
         emotion_result = process_video_for_emotion(video_id)
         
         # Get song recommendation
@@ -100,6 +104,8 @@ def process_video():
             result["mae"] = emotion_result["mae"]
         if "pathway_means" in emotion_result:
             result["pathway_means"] = emotion_result["pathway_means"]
+        if "pathway_variances" in emotion_result:
+            result["pathway_variances"] = emotion_result["pathway_variances"]
         
         return jsonify(result)
             
@@ -112,7 +118,7 @@ def get_song(song_id):
     Serve audio file for a given song ID
     """
     try:
-        audio_path = Path(f"../data/deam/MEMD_audio/{song_id}.mp3")
+        audio_path = DEAM_AUDIO_DIR / f"{song_id}.mp3"
         if audio_path.exists():
             return send_file(str(audio_path), as_attachment=False)
         else:
@@ -169,4 +175,4 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))

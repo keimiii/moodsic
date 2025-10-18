@@ -1,6 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import './index.css';
+
+const runtimeConfig = typeof window !== 'undefined' ? window.__RUNTIME_CONFIG__ : undefined;
+const API_BASE_URL = ((runtimeConfig && runtimeConfig.API_BASE_URL) || process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
+const createApiClient = () =>
+  axios.create({
+    baseURL: API_BASE_URL || undefined,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
 function App() {
   const [videos, setVideos] = useState([]);
@@ -14,43 +24,103 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [pathwayMetricView, setPathwayMetricView] = useState('mean');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const isWarmingUpRef = useRef(false);
 
-  // Load clusters and videos on component mount
-  useEffect(() => {
-    loadClusters();
-    loadVideos();
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [isWarmingUp, setIsWarmingUp] = useState(false);
+  const [backendWarmupError, setBackendWarmupError] = useState(null);
+
+  useEffect(() => () => {
+    isMountedRef.current = false;
   }, []);
 
-  // Load clusters from backend
-  const loadClusters = async () => {
+  const loadClusters = useCallback(async () => {
+    const apiClient = createApiClient();
     try {
-      const response = await axios.get('/api/clusters');
-      setClusters(response.data);
+      const response = await apiClient.get('/api/clusters');
+      setClusters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error loading clusters:', error);
+      setClusters([]);
     }
-  };
+  }, []);
 
-  // Load videos from backend
-  const loadVideos = async () => {
+  const loadVideos = useCallback(async () => {
+    const apiClient = createApiClient();
     try {
-      const response = await axios.get('/api/videos');
-      setVideos(response.data);
+      const response = await apiClient.get('/api/videos');
+      setVideos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error loading videos:', error);
+      setVideos([]);
     }
-  };
+  }, []);
+
+  const warmUpBackend = useCallback(async () => {
+    if (isWarmingUpRef.current) {
+      return;
+    }
+
+    isWarmingUpRef.current = true;
+    setIsWarmingUp(true);
+    setBackendWarmupError(null);
+    setIsBackendReady(false);
+
+    const maxAttempts = 6;
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const apiClient = createApiClient();
+          await apiClient.get('/api/health', { timeout: 8000 });
+          if (isMountedRef.current) {
+            setIsBackendReady(true);
+            setBackendWarmupError(null);
+          }
+          return;
+        } catch (error) {
+          if (attempt === maxAttempts) {
+            if (isMountedRef.current) {
+              setBackendWarmupError(
+                'The backend is still starting up. Please try again in a moment.'
+              );
+            }
+            return;
+          }
+          const backoff = Math.min(5000, 500 * 2 ** (attempt - 1));
+          await delay(backoff);
+        }
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsWarmingUp(false);
+      }
+      isWarmingUpRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    warmUpBackend();
+  }, [warmUpBackend]);
+
+  useEffect(() => {
+    if (!isBackendReady) {
+      return;
+    }
+    loadClusters();
+    loadVideos();
+  }, [isBackendReady, loadClusters, loadVideos]);
 
   // Handle video selection
   const handleVideoSelect = (video) => {
     setSelectedVideo(video);
-    setVideoUrl(`/api/video/${video.id}`);
+    setVideoUrl(`${API_BASE_URL}/api/video/${video.id}`);
     setEmotionData(null); // Reset emotion data when selecting new video
-    setPathwayMetricView('mean');
     if (audioElement) {
       audioElement.pause();
     }
@@ -70,12 +140,9 @@ function App() {
 
     setIsProcessing(true);
     try {
-      const response = await axios.post('/api/process-video', {
+      const apiClient = createApiClient();
+      const response = await apiClient.post('/api/process-video', {
         video_id: selectedVideo.id
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       setEmotionData(response.data);
@@ -97,7 +164,7 @@ function App() {
       audioElement.pause();
     }
 
-    const audio = new Audio(`/api/song/${song.song_id}`);
+    const audio = new Audio(`${API_BASE_URL}/api/song/${song.song_id}`);
     audio.addEventListener('loadedmetadata', () => {
       setDuration(audio.duration);
     });
@@ -225,30 +292,19 @@ function App() {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return '—';
     }
-    if (view === 'mae') {
-      return value.toFixed(3);
+    switch (view) {
+      case 'mae':
+        return value.toFixed(3);
+      case 'variance':
+        return value.toFixed(4);
+      case 'mean':
+      default: {
+        const prefix = value >= 0 ? '+' : '';
+        return `${prefix}${value.toFixed(2)}`;
+      }
     }
-    const prefix = value >= 0 ? '+' : '';
-    return `${prefix}${value.toFixed(2)}`;
   };
 
-  useEffect(() => {
-    if (emotionData && pathwayMetricView === 'mean' && !emotionData.pathway_means) {
-      setPathwayMetricView('mae');
-    }
-  }, [emotionData, pathwayMetricView]);
-
-  const hasPathwayMeans = Boolean(emotionData?.pathway_means);
-  const activeMetricView = hasPathwayMeans ? pathwayMetricView : 'mae';
-  const activePathwayMetrics = useMemo(() => {
-    if (!emotionData) {
-      return null;
-    }
-    if (activeMetricView === 'mae') {
-      return emotionData.mae || null;
-    }
-    return emotionData.pathway_means || null;
-  }, [emotionData, activeMetricView]);
   const lowestMaePathways = useMemo(() => {
     if (!emotionData?.mae) {
       return { valence: null, arousal: null };
@@ -283,12 +339,9 @@ function App() {
       arousal: lowestArousalPathway,
     };
   }, [emotionData]);
-  const metricHeading = activeMetricView === 'mae' 
-    ? 'Pathway Overall MAE' 
-    : 'Pathway Mean Scores';
-  const metricSubheading = activeMetricView === 'mae'
-    ? 'Valence · Arousal (lower is better)'
-    : 'Valence · Arousal (range -1 to +1)';
+  const maeMetrics = emotionData?.mae || null;
+  const pathwayMeans = emotionData?.pathway_means || null;
+  const pathwayVariances = emotionData?.pathway_variances || null;
 
   // Canvas animation
   useEffect(() => {
@@ -415,6 +468,35 @@ function App() {
       }
     };
   }, [clusters, emotionData]);
+
+  if (!isBackendReady) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-card">
+          <h1>Moodsic</h1>
+          <p className="loading-subtitle">
+            Warming up the backend service. This can take a few moments after periods of inactivity.
+          </p>
+          {backendWarmupError ? (
+            <>
+              <p className="loading-error">{backendWarmupError}</p>
+              <div className="loading-actions">
+                <button
+                  type="button"
+                  onClick={warmUpBackend}
+                  disabled={isWarmingUp}
+                >
+                  {isWarmingUp ? 'Retrying…' : 'Try again'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="loading-spinner" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
@@ -552,92 +634,111 @@ function App() {
         <div className="analysis-container">
           <div className="video-info">
             <div className="video-title">
-              {emotionData ? 'Analysis Results' : 'Video Analysis'}
+              {emotionData ? 'Valence (V) / Arousal (A) Analysis Results' : 'Video Analysis'}
             </div>
             {emotionData && (
               <div className="model-breakdown">
-                <article className="signal-card">
-                  <header className="signal-title">Fusion Output</header>
-                  <div className="signal-line">
-                    <span className="signal-label">Valence</span>
-                    <span className="signal-value">
-                      {emotionData.valence >= 0 ? '+' : ''}{emotionData.valence.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="signal-line">
-                    <span className="signal-label">Arousal</span>
-                    <span className="signal-value">
-                      {emotionData.arousal >= 0 ? '+' : ''}{emotionData.arousal.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="signal-status">Variance-weighted</div>
-                </article>
-                {(emotionData.mae || emotionData.pathway_means) && activePathwayMetrics && (
+                {(maeMetrics || pathwayMeans) && (
                   <div className="mae-metrics">
-                    <div className="mae-header">
-                      <div className="mae-labels">
-                        <span className="mae-heading">{metricHeading}</span>
-                        <span className="mae-subheading">{metricSubheading}</span>
-                      </div>
-                      {hasPathwayMeans && (
-                        <div className="mae-toggle" role="group" aria-label="Pathway metric view">
-                          <button
-                            type="button"
-                            className={activeMetricView === 'mean' ? 'is-active' : ''}
-                            onClick={() => setPathwayMetricView('mean')}
-                          >
-                            Scores
-                          </button>
-                          <button
-                            type="button"
-                            className={activeMetricView === 'mae' ? 'is-active' : ''}
-                            onClick={() => setPathwayMetricView('mae')}
-                          >
-                            MAE
-                          </button>
+                    {maeMetrics && (
+                      <section className="mae-section">
+                        <div className="mae-grid">
+                          <div className="mae-header">
+                            <div className="mae-labels">
+                              <span className="mae-heading">V/A MAE</span>
+                              <span className="mae-subheading">Against held-out dataset</span>
+                            </div>
+                          </div>
+                          {['scene', 'face', 'fusion'].map((pathway) => {
+                            const metrics = maeMetrics?.[pathway] || {};
+                            const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                            const isLowestValence = lowestMaePathways.valence === pathway;
+                            const isLowestArousal = lowestMaePathways.arousal === pathway;
+                            return (
+                              <article
+                                key={`mae-${pathway}`}
+                                className="mae-card"
+                              >
+                                <header className="mae-title">
+                                  <span>{title}</span>
+                                </header>
+                                <div className="mae-row">
+                                  <span className="mae-label">V</span>
+                                  <span className={`mae-value${isLowestValence ? ' is-lowest' : ''}`}>
+                                    {formatPathwayValue(metrics.valence, 'mae')}
+                                  </span>
+                                </div>
+                                <div className="mae-row">
+                                  <span className={`mae-label`}>A</span>
+                                  <span className={`mae-value${isLowestArousal ? ' is-lowest' : ''}`}>
+                                    {formatPathwayValue(metrics.arousal, 'mae')}
+                                  </span>
+                                </div>
+                              </article>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
-                    <div className="mae-grid">
-                      {['scene', 'face', 'fusion'].map((pathway) => {
-                        const metrics = activePathwayMetrics?.[pathway] || {};
-                        const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
-                        const isLowestValence =
-                          activeMetricView === 'mae' && lowestMaePathways.valence === pathway;
-                        const isLowestArousal =
-                          activeMetricView === 'mae' && lowestMaePathways.arousal === pathway;
-                        const isFusionPathway = pathway === 'fusion';
-                        const cardClasses = ['mae-card'];
-                        if (activeMetricView === 'mean' && isFusionPathway) {
-                          cardClasses.push('is-fusion');
-                        }
-                        return (
-                          <article
-                            key={pathway}
-                            className={cardClasses.join(' ')}
-                          >
-                            <header className="mae-title">
-                              <span>{title}</span>
-                              {activeMetricView === 'mean' && isFusionPathway && (
-                                <span className="mae-badge">LEAD</span>
-                              )}
-                            </header>
-                            <div className="mae-row">
-                              <span className="mae-label">Val</span>
-                              <span className={`mae-value${isLowestValence ? ' is-lowest' : ''}`}>
-                                {formatPathwayValue(metrics.valence, activeMetricView)}
-                              </span>
+                      </section>
+                    )}
+                    {pathwayMeans && (
+                      <section className="mae-section">
+                        <div className="mae-grid">
+                          <div className="mae-header">
+                            <div className="mae-labels">
+                              <span className="mae-heading">V/A Output</span>
+                              <span className="mae-subheading">SD = Standard Deviation</span>
                             </div>
-                            <div className="mae-row">
-                              <span className="mae-label">Aro</span>
-                              <span className={`mae-value${isLowestArousal ? ' is-lowest' : ''}`}>
-                                {formatPathwayValue(metrics.arousal, activeMetricView)}
-                              </span>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
+                          </div>
+                          {['scene', 'face', 'fusion'].map((pathway) => {
+                            const metrics = pathwayMeans?.[pathway] || {};
+                            const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
+                            const isFusionPathway = pathway === 'fusion';
+                            const cardClasses = ['mae-card'];
+                            if (isFusionPathway) {
+                              cardClasses.push('is-fusion');
+                            }
+                            return (
+                              <article
+                                key={`mean-${pathway}`}
+                                className={cardClasses.join(' ')}
+                              >
+                                <header className="mae-title">
+                                  <span>{title}</span>
+                                </header>
+                                <div className="mae-row">
+                                  <span className="mae-label">V</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.valence, 'mean')}
+                                  </span>
+                                </div>
+                                {pathway !== 'fusion' && (
+                                <div className="mae-row">
+                                  <span className="mae-label">SD (V)</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.valence, 'variance')}
+                                  </span>
+                                </div>
+                                )}
+                                <div className="mae-row">
+                                  <span className="mae-label">A</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.arousal, 'mean')}
+                                  </span>
+                                </div>
+                                {pathway !== 'fusion' && (
+                                <div className="mae-row">
+                                  <span className="mae-label">SD (A)</span>
+                                  <span className="mae-value">
+                                    {formatPathwayValue(metrics.arousal, 'variance')}
+                                  </span>
+                                </div>
+                                )}
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 )}
                 <div className="result-comments">
