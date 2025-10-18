@@ -690,7 +690,8 @@ function App() {
                             </div>
                           </div>
                           {['scene', 'face', 'fusion'].map((pathway) => {
-                            const metrics = pathwayMeans?.[pathway] || {};
+                            const metrics_mean = pathwayMeans?.[pathway] || {};
+                            const metrics_variance = pathwayVariances?.[pathway] || {};
                             const title = `${pathway.charAt(0).toUpperCase()}${pathway.slice(1)}`;
                             const isFusionPathway = pathway === 'fusion';
                             const cardClasses = ['mae-card'];
@@ -708,28 +709,28 @@ function App() {
                                 <div className="mae-row">
                                   <span className="mae-label">V</span>
                                   <span className="mae-value">
-                                    {formatPathwayValue(metrics.valence, 'mean')}
+                                    {formatPathwayValue(metrics_mean.valence, 'mean')}
                                   </span>
                                 </div>
                                 {pathway !== 'fusion' && (
                                 <div className="mae-row">
                                   <span className="mae-label">SD (V)</span>
                                   <span className="mae-value">
-                                    {formatPathwayValue(metrics.valence, 'variance')}
+                                    {formatPathwayValue(metrics_variance.valence, 'variance')}
                                   </span>
                                 </div>
                                 )}
                                 <div className="mae-row">
                                   <span className="mae-label">A</span>
                                   <span className="mae-value">
-                                    {formatPathwayValue(metrics.arousal, 'mean')}
+                                    {formatPathwayValue(metrics_mean.arousal, 'mean')}
                                   </span>
                                 </div>
                                 {pathway !== 'fusion' && (
                                 <div className="mae-row">
                                   <span className="mae-label">SD (A)</span>
                                   <span className="mae-value">
-                                    {formatPathwayValue(metrics.arousal, 'variance')}
+                                    {formatPathwayValue(metrics_variance.arousal, 'variance')}
                                   </span>
                                 </div>
                                 )}

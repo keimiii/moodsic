@@ -35,10 +35,9 @@ _MEAN_COLUMNS = {
     "face": ("mean_face_valence", "mean_face_arousal"),
     "fusion": ("mean_fusion_valence", "mean_fusion_arousal"),
 }
-_VARIANCE_COLUMNS = {
-    "scene": ("var_scene_valence", "var_scene_arousal"),
-    "face": ("var_face_valence", "var_face_arousal"),
-    "fusion": ("var_fusion_valence", "var_fusion_arousal"),
+_STD_DEV_COLUMNS = {
+    "scene": ("scene_valence_std_dev", "scene_arousal_std_dev"),
+    "face": ("face_valence_std_dev", "face_arousal_std_dev"),
 }
 
 
@@ -207,7 +206,7 @@ def _pathway_metrics_for_video(
 
     mae_payload: Dict[str, Dict[str, Optional[float]]] = {}
     mean_payload: Dict[str, Dict[str, Optional[float]]] = {}
-    variance_payload: Dict[str, Dict[str, Optional[float]]] = {}
+    std_dev_payload: Dict[str, Dict[str, Optional[float]]] = {}
     for pathway, (valence_key, arousal_key) in _MAE_COLUMNS.items():
         mae_payload[pathway] = {
             "valence": _to_float(row.get(valence_key)),
@@ -218,14 +217,15 @@ def _pathway_metrics_for_video(
             "valence": _to_float(row.get(mean_valence_key)),
             "arousal": _to_float(row.get(mean_arousal_key)),
         }
-        variance_valence_key, variance_arousal_key = _VARIANCE_COLUMNS[pathway]
-        variance_payload[pathway] = {
-            "valence": _to_float(row.get(variance_valence_key)),
-            "arousal": _to_float(row.get(variance_arousal_key)),
+        if pathway == 'fusion':
+            continue  # No variance for fusion pathway
+        std_dev_valence_key, std_dev_arousal_key = _STD_DEV_COLUMNS[pathway]
+        std_dev_payload[pathway] = {
+            "valence": _to_float(row.get(std_dev_valence_key)),
+            "arousal": _to_float(row.get(std_dev_arousal_key)),
         }
-    print(variance_payload)
 
-    return {"mae": mae_payload, "means": mean_payload, "variances": variance_payload}
+    return {"mae": mae_payload, "means": mean_payload, "variances": std_dev_payload}
 
 
 def process_video_for_emotion(video_id: str) -> Dict[str, Any]:
