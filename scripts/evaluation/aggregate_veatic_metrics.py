@@ -251,6 +251,18 @@ def _clip_variance(value: Optional[object]) -> Optional[float]:
     return total
 
 
+def _std_from_variance(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        variance = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(variance) or variance < 0.0:
+        return None
+    return math.sqrt(variance)
+
+
 def summarize_run(
     video_id: str,
     inference: Mapping[str, object],
@@ -307,15 +319,12 @@ def build_per_video_rows(
                     row[f"mean_{pathway}_{metric}"] = run_summary["means"][pathway][metric]
                     row[f"mae_{pathway}_{metric}"] = run_summary["metrics"][pathway][metric]
                     row[f"var_{pathway}_{metric}"] = run_summary["variances"][pathway][metric]
-            fused_variances = run_summary["variances"].get("fusion", {})
-            fused_valence_var = fused_variances.get("valence")
-            fused_arousal_var = fused_variances.get("arousal")
-            row["valence_std_dev"] = (
-                math.sqrt(fused_valence_var) if fused_valence_var is not None and fused_valence_var >= 0.0 else None
-            )
-            row["arousal_std_dev"] = (
-                math.sqrt(fused_arousal_var) if fused_arousal_var is not None and fused_arousal_var >= 0.0 else None
-            )
+            face_variances = run_summary["variances"].get("face", {})
+            scene_variances = run_summary["variances"].get("scene", {})
+            row["face_valence_std_dev"] = _std_from_variance(face_variances.get("valence"))
+            row["face_arousal_std_dev"] = _std_from_variance(face_variances.get("arousal"))
+            row["scene_valence_std_dev"] = _std_from_variance(scene_variances.get("valence"))
+            row["scene_arousal_std_dev"] = _std_from_variance(scene_variances.get("arousal"))
             row["export_timestamp"] = export_timestamp
             run_rows[stabilized_flag] = row
         for metric in METRICS:
@@ -552,8 +561,10 @@ def main() -> None:
             per_video_columns.append(f"mae_{pathway}_{metric}")
         for metric in METRICS:
             per_video_columns.append(f"var_{pathway}_{metric}")
-    per_video_columns.append("valence_std_dev")
-    per_video_columns.append("arousal_std_dev")
+    per_video_columns.append("face_valence_std_dev")
+    per_video_columns.append("face_arousal_std_dev")
+    per_video_columns.append("scene_valence_std_dev")
+    per_video_columns.append("scene_arousal_std_dev")
     for metric in METRICS:
         per_video_columns.append(f"face_beats_fusion_{metric}")
         per_video_columns.append(f"scene_beats_fusion_{metric}")
