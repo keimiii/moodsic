@@ -686,7 +686,7 @@ function App() {
                           <div className="mae-header">
                             <div className="mae-labels">
                               <span className="mae-heading">V/A Output</span>
-                              <span className="mae-subheading">VAR = Variance uncertainty</span>
+                              <span className="mae-subheading">SD = Standard Deviation</span>
                             </div>
                           </div>
                           {['scene', 'face', 'fusion'].map((pathway) => {
@@ -711,24 +711,28 @@ function App() {
                                     {formatPathwayValue(metrics.valence, 'mean')}
                                   </span>
                                 </div>
+                                {pathway !== 'fusion' && (
                                 <div className="mae-row">
-                                  <span className="mae-label">VAR (V)</span>
+                                  <span className="mae-label">SD (V)</span>
                                   <span className="mae-value">
                                     {formatPathwayValue(metrics.valence, 'variance')}
                                   </span>
                                 </div>
+                                )}
                                 <div className="mae-row">
                                   <span className="mae-label">A</span>
                                   <span className="mae-value">
                                     {formatPathwayValue(metrics.arousal, 'mean')}
                                   </span>
                                 </div>
+                                {pathway !== 'fusion' && (
                                 <div className="mae-row">
-                                  <span className="mae-label">VAR (A)</span>
+                                  <span className="mae-label">SD (A)</span>
                                   <span className="mae-value">
                                     {formatPathwayValue(metrics.arousal, 'variance')}
                                   </span>
                                 </div>
+                                )}
                               </article>
                             );
                           })}
