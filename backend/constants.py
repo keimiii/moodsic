@@ -45,3 +45,48 @@ CLUSTER_METADATA = {
         "traits": ["slow-mid tempo", "soft drums", "warm harmonies", "relaxed feel"],
     },
 }
+
+
+AVAILABLE_VIDEOS = [
+    {"id": "0", "name": "Video 0", "filename": "0.mp4"},
+    {"id": "4", "name": "Video 4", "filename": "4.mp4"},
+    {"id": "12", "name": "Video 12", "filename": "12.mp4"},
+    {"id": "34", "name": "Video 34", "filename": "34.mp4"},
+    {"id": "40", "name": "Video 40", "filename": "40.mp4"},
+    {"id": "42", "name": "Video 42", "filename": "42.mp4"},
+    {"id": "44", "name": "Video 44", "filename": "44.mp4"},
+    {"id": "49", "name": "Video 49", "filename": "49.mp4"},
+    {"id": "53", "name": "Video 53", "filename": "53.mp4"},
+    {"id": "55", "name": "Video 55", "filename": "55.mp4"},
+    {"id": "60", "name": "Video 60", "filename": "60.mp4"},
+    {"id": "79", "name": "Video 79", "filename": "79.mp4"},
+    {"id": "81", "name": "Video 81", "filename": "81.mp4"},
+    {"id": "86", "name": "Video 86", "filename": "86.mp4"},
+    {"id": "95", "name": "Video 95", "filename": "95.mp4"},
+    {"id": "96", "name": "Video 96", "filename": "96.mp4"},
+    {"id": "102", "name": "Video 102", "filename": "102.mp4"},
+    {"id": "114", "name": "Video 114", "filename": "114.mp4"},
+    {"id": "120", "name": "Video 120", "filename": "120.mp4"},
+]
+
+VIDEO_ID_TO_COMMENTS = {
+    "0": "Scene: Two women chatting on the boat, presumably melancholic. Slow acoustic rock music appropriate at times, but not when characters are speaking.",
+    "4": "Scene: Man trapped in a cave. Hard Rock music very appropriate to capture tension.",
+    "12": "Scene: Cowboys fighting. Whimsical music not very appropriate",
+    "34": "No comments available.",
+    "40": "No comments available.",
+    "42": "Scene: Teacher caught student breaking a rule. The mysterious, bouncy tone works well up to the mood drop when the student approaches the front. The later return to upbeat music, however, disrupts the emotional flow.",
+    "44": "Scene: A man dozes off in a chair and wakes up to find the patient bed beside him empty. Alarmed, he gets up and starts searching. Western Cowboy Ballad music about saying goodbye but it does not match the tension of the moment",
+    "49": "Scene: uncomfortable tension as the man and woman lie stiffly on the same bed. The music’s bouncy, mellow vibe and romantic lyrics create a “falling in love” feeling, which doesn’t suit the tense atmosphere.",
+    "53": "Scene: a man in a dirty suit walking on a dessert. The mysterious music gradually shifts to a tone of enlightenment as he looks around and takes a drink.",
+    "55": "Scene: A man and a woman talk in a swimming pool, their conversation charged with romantic tension. The pop/electronic music complements the mood perfectly, matching the subtle chemistry between them.",
+    "60": "No comments available.",
+    "79": "No comments available.",
+    "81": "No comments available.",
+    "86": "No comments available.",
+    "95": "Scene: Diver is anxious and scared while looking down at the pool he's supposed to dive into, almost jumps in but backs out multiple times due to fear. The jittery pop song suits the general vibe, but is slightly too upbeat.",
+    "96": "Scene: A lady is giving a eulogy at someone's funeral, and there scenes of many people's mixed reactions. The rock song suits the chaotic energy of the video.",
+    "102": "Scene: A couple is boarding a train, and the couple seems bittersweet about their having to part. The jazzy music suits this video and captures the tense mood.",
+    "114": "Scene: A girl is complaining to another girl about something in an angry manner, and the other girl is trying to help her figure things out. This folksy music captures the negative emotions and slight mood arousal well.",
+    "120": "Scene: A girl is visiting a guy at his place and there is romantic tension in the air. \nThis electronic song is not appropriate.",
+}

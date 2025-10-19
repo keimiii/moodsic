@@ -43,25 +43,13 @@ npm install
 - Scripts such as `scripts/train_scene_model.py` and `scripts/evaluation/run_inference_pipeline.py` read and write from `data/` and `results/`; keep those directories writable.
 
 ## Running the Application
+**We deployed the application at https://moodsic-fe.onrender.com/**
 
-`run_app.sh` activates the virtualenv (when present), starts the Flask backend (`backend/run.py`), and launches the React development server:
+Alternatively, you can run the application using the following instructions:
 
-### 3. Run Application
 Ensure that Docker is running in the background.
 ```bash
 ./run_app.sh
-```
-
-The script assumes you have already run `npm install` in `frontend/`. To start the services manually:
-
-```bash
-source .venv/bin/activate.fish
-python backend/run.py  # http://localhost:5000
-```
-
-```bash
-cd frontend
-npm start  # http://localhost:3000
 ```
 
 ## Project Structure
