@@ -72,9 +72,9 @@ AVAILABLE_VIDEOS = [
 VIDEO_ID_TO_COMMENTS = {
     "0": "Scene: Two women chatting on the boat, presumably melancholic. Slow acoustic rock music appropriate at times, but not when characters are speaking.",
     "4": "Scene: Man trapped in a cave. Hard Rock music very appropriate to capture tension.",
-    "12": "Scene: Cowboys fighting. Whimsical music not very appropriate",
-    "34": "No comments available.",
-    "40": "No comments available.",
+    "12": "Scene: Intense scene of Cowboys fighting - somewhat violent. Whimsical music not very appropriate.",
+    "34": "Scene: A heartfelt scene with a man talking to his dog that's lying on the vet table. Slow acoustic music very appropriate.",
+    "40": "Scene: Daughter having a chat with her parents. The electronic tune that gives off a synth-heavy moody, atmospheric vibe doesn't seem appropriate.",
     "42": "Scene: Teacher caught student breaking a rule. The mysterious, bouncy tone works well up to the mood drop when the student approaches the front. The later return to upbeat music, however, disrupts the emotional flow.",
     "44": "Scene: A man dozes off in a chair and wakes up to find the patient bed beside him empty. Alarmed, he gets up and starts searching. Western Cowboy Ballad music about saying goodbye but it does not match the tension of the moment",
     "49": "Scene: uncomfortable tension as the man and woman lie stiffly on the same bed. The music’s bouncy, mellow vibe and romantic lyrics create a “falling in love” feeling, which doesn’t suit the tense atmosphere.",
@@ -88,5 +88,5 @@ VIDEO_ID_TO_COMMENTS = {
     "96": "Scene: A lady is giving a eulogy at someone's funeral, and there scenes of many people's mixed reactions. The rock song suits the chaotic energy of the video.",
     "102": "Scene: A couple is boarding a train, and the couple seems bittersweet about their having to part. The jazzy music suits this video and captures the tense mood.",
     "114": "Scene: A girl is complaining to another girl about something in an angry manner, and the other girl is trying to help her figure things out. This folksy music captures the negative emotions and slight mood arousal well.",
-    "120": "Scene: A girl is visiting a guy at his place and there is romantic tension in the air. \nThis electronic song is not appropriate.",
+    "120": "Scene: A girl is visiting a guy at his place and there is romantic tension in the air. This electronic song is not appropriate.",
 }
