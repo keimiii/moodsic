@@ -3,7 +3,7 @@ import os
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import polars as pl
-from constants import AVAILABLE_VIDEOS, VIDEO_ID_TO_COMMENTS
+from constants import AVAILABLE_VIDEOS, VIDEO_ID_TO_COMMENTS, VIDEO_ID_TO_MATCH_RESULTS
 from helpers.process_video import process_video_for_emotion
 from helpers.song_recommendation import recommend_song
 from constants import (
@@ -77,6 +77,7 @@ def process_video():
             "cluster_id": emotion_result["cluster_id"],
             "song": song_recommendation,
             "comments": VIDEO_ID_TO_COMMENTS.get(video_id, 'No comments available.'),
+            "match": VIDEO_ID_TO_MATCH_RESULTS.get(video_id, '-')
         }
         if "mae" in emotion_result:
             result["mae"] = emotion_result["mae"]

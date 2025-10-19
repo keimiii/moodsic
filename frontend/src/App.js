@@ -746,6 +746,10 @@ function App() {
                   <h4>Comments</h4>
                   <p>{emotionData.comments || 'No comments available.'}</p>
                 </div>
+                <div className="result-comments">
+                  <h4>Results match</h4>
+                  <p>{emotionData.match || '-'}</p>
+                </div>
               </div>
             )}
           </div>

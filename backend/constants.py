@@ -90,3 +90,25 @@ VIDEO_ID_TO_COMMENTS = {
     "114": "Scene: A girl is complaining to another girl about something in an angry manner, and the other girl is trying to help her figure things out. This folksy music captures the negative emotions and slight mood arousal well.",
     "120": "Scene: A girl is visiting a guy at his place and there is romantic tension in the air. This electronic song is not appropriate.",
 }
+
+VIDEO_ID_TO_MATCH_RESULTS = {
+    "0": "Partially",
+    "4": "Yes",
+    "12": "No",
+    "34": "Yes",
+    "40": "No",
+    "42": "Partially",
+    "44": "No",
+    "49": "No",
+    "53": "Yes",
+    "55": "Yes",
+    "60": "-",
+    "79": "-",
+    "81": "-",
+    "86": "-",
+    "95": "Partially",
+    "96": "Yes",
+    "102": "Yes",
+    "114": "Yes",
+    "120": "No",
+}
