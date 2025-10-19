@@ -1,6 +1,6 @@
 # Emotion-Aware Environmental Orchestration: Adaptive Music for Dynamic Spaces — Technical Architecture
 
-**Revision:** Oct 11, 2025  
+**Revision:** Oct 19, 2025 — VEATIC fusion/stability tracking locked in for Stage III  
 **Team:** 4 members (≈40 man-days total)  
 **Course:** NUS MTech in AI Systems
 
@@ -109,7 +109,7 @@ Neither model alone is sufficient. Scene-only can miss actual human emotion; fac
 **Integration status**
 - Runtime helper `perceive_video` samples VEATIC clips at approximately 1 fps by default (`target_sample_fps=1.0`) to align with label cadence and keep fusion outputs manageable; see `docs/Stage IV — Inference/veatic_inference.md` for the full rundown.
 - Fusion guardrails and optional EMA stabilizer follow the demo configuration in `notebooks/Inference/e2e_video_to_fusion.ipynb`; enable smoothing when benchmarking jitter-sensitive metrics.
-- Status: VEATIC MAE aggregation now runs from the pre-generated parquet exports (`results/inference/pipeline_results_*.parquet`), and the dashboard consumes the per-video CSVs surfaced by `scripts/evaluation/aggregate_veatic_metrics.py` via the Flask backend.
+- Status: VEATIC MAE aggregation now runs from the pre-generated parquet exports (`results/inference/pipeline_results_*.parquet`), and the dashboard consumes the per-video CSVs surfaced by `scripts/evaluation/aggregate_veatic_metrics.py` via the Flask backend. The latest pass (Oct 2025) establishes those artifacts—including the new per-pathway standard deviations—as the canonical source for fusion validation and stability tracking, which is why the Stage III checklists now read “complete.”
 
 **Licensing note**
 - VEATIC is available for research purposes; copyright remains with the original owners of the video content. Redistribution and commercial use are restricted per the project’s terms.
@@ -174,7 +174,7 @@ detections, aligns each crop, runs EmoNet with stochastic TTA, and aggregates
 both intra-face and inter-face uncertainty before fusion. The scene path now
 standardizes on the CLIP ViT-B/32 adapter trained in
 `notebooks/scene/CLIP_ViT-B32_improved.ipynb`, exported as
-`scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`. Earlier DINO/ResNet experiments remain available
+`scene/checkpoints/clip_vit-b32_improved_fixed.pkl`. Earlier DINO/ResNet experiments remain available
 for reference, and fusion continues to use inverse-variance weighting informed
 by the richer variance signal.
 
@@ -186,18 +186,18 @@ by the richer variance signal.
   for details) showed this configuration delivering the best
   FindingEmo performance once all scores were reported in the common [-1, 1]
   space using `fe_to_ref` scaling. The exported checkpoint lives at
-  `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` and is loaded
+  `scene/checkpoints/clip_vit-b32_improved_fixed.pkl` and is loaded
   automatically by `SceneCLIPAdapter`.
 - Performance snapshot (FindingEmo, reference [-1, 1]):
-  - Valence MAE: 0.3561
-  - Arousal MAE: 0.4264
-  - Average MAE: 0.3913
-  - Spearman (valence / arousal / avg): 0.6643 / 0.3247 / 0.4945
+  - Valence MAE: 0.3746
+  - Arousal MAE: 0.4351
+  - Average MAE: 0.4048
+  - Spearman (valence / arousal / avg): 0.6641 / 0.2225 / 0.4433
   These metrics come from the held-out split in
   [Stage III — Training/scene_model_ablation.md](docs/Stage%20III%20—%20Training/scene_model_ablation.md)
   (CLIP_ViT-B32_improved column) and outperform
-  the strongest DINOv3 baseline (`dinov3_mlp`) by roughly 6% absolute MAE
-  (0.4163 → 0.3913).
+  the strongest DINOv3 baseline (`dinov3_mlp`) by roughly 3% absolute MAE
+  (0.4163 → 0.4048).
 - When CLIP resources are unavailable (e.g., offline experimentation), the
   earlier backbones can still be instantiated manually; their configurations and
   metrics remain catalogued in the ablation sheet.
@@ -217,8 +217,8 @@ by the richer variance signal.
   regression heads plus an auxiliary pseudo-emo8 classification loss described
   in the ablation doc, which stabilises optimisation and reduces overfitting.
   The DINO variants use plain MSE on valence/arousal, so they lack that extra
-  supervision signal. The result is a ≈0.025 improvement in average MAE after
-  scaling to [-1, 1] (0.3913 vs. 0.4163).
+  supervision signal. The result is a ≈0.012 improvement in average MAE after
+  scaling to [-1, 1] (0.4048 vs 0.4163).
 - **Augmentation + resolution alignment** — CLIP maintains its native
   224×224 crop pipeline with colour jitter, perspective, and Gaussian blur,
   closely matching the model’s pretraining distribution. The DINO notebooks
@@ -231,7 +231,7 @@ by the richer variance signal.
 - **Lightweight adapter fine-tuning for DINOv3/CLIP** — Experiment with
   parameter-efficient modules (LoRA or bottleneck adapters) on top of the frozen
   backbones. This keeps compute modest while giving the model capacity to learn
-  emotion-specific shifts; it may narrow the 0.025 MAE gap highlighted in the
+  emotion-specific shifts; it may narrow the 0.012 MAE gap highlighted in the
   ablation notes.
 - **Curriculum with VEATIC pseudo-labels** — Use the richer VEATIC video set for
   semi-supervised fine-tuning by distilling high-confidence CLIP predictions
@@ -381,7 +381,7 @@ variance in reference space `[-1, 1]`.
 - Backbone: `openai/clip-vit-base-patch32` (configurable) with parameters frozen
   at inference time.
 - Heads: two lightweight MLPs trained offline in `notebooks/scene/` and saved
-  to `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`.
+  to `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`.
 - Uncertainty: MC Dropout is achieved by enabling dropout layers for a handful
   of stochastic forward passes (`tta` samples).
 
@@ -722,7 +722,7 @@ Phase 0 notebook workflow (high level):
 3. Freeze the CLIP backbone and train only the heads for ten epochs using a
    one-cycle schedule (LR finder to seed `lr_max`).
 4. Unfreeze selected backbone layers for a brief fine tune and export the
-   resulting state dict to `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`.
+   resulting state dict to `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`.
 5. Leave the face path untouched (EmoNet remains a fixed pretrained expert).
 
 ---
@@ -780,7 +780,7 @@ The VEATIC evaluation mirrors the canonical workflow documented in `docs/Stage V
 - **Prerequisites:** Ensure VEATIC ground-truth label CSVs live under `data/VEATIC/rating_averaged/` and that stabilized/unstabilized inference exports exist for the same video set. Activate the virtual environment with `source .venv/bin/activate.fish` before running any scripts.
 - **Primary artifact:** The inference pipeline emits `results/inference/pipeline_results_<timestamp>.parquet`, containing per-video predictions, metadata, and serialized mode payloads for both stabilized and unstabilized runs. This replaces the legacy paired JSON directories, which stay supported only as a fallback.
 - **Aggregation:** Run `python scripts/evaluation/aggregate_veatic_metrics.py results/inference/pipeline_results_<timestamp>.parquet` to generate three synchronized artifacts in `results/evaluation/`: `veatic_per_video_<timestamp>.csv`, `veatic_aggregate_<timestamp>.csv`, and `veatic_run_params_<timestamp>.json`.
-- **Metrics reported:** Dataset-level MAE (mean/median) for valence and arousal across scene, face, and fusion pathways; pathway coverage summaries; stabilization deltas (mean/median ΔMAE with 95% CIs); and any variance diagnostics embedded in the Parquet payload. Per-video CSVs expose clip-level deltas, pathway win/loss flags, and coverage indicators for deeper dives.
+- **Metrics reported:** Dataset-level MAE (mean/median) for valence and arousal across scene, face, and fusion pathways; pathway coverage summaries; stabilization deltas (mean/median ΔMAE with 95% CIs); variance means; and the new per-pathway standard deviation columns (e.g., `face_valence_std_dev`, `scene_valence_std_dev`). Per-video CSVs expose clip-level deltas, pathway win/loss flags, and coverage indicators for deeper dives.
 - **Interpretation checklist:** Confirm fusion outperforms individual pathways, sanity-check stabilization deltas (expect near-zero mean shifts for current EMA settings), review coverage outliers, and inspect variance trends when fusion underperforms. Keep the run summary in `docs/Stage VI - Evaluation/` updated with the timestamped artifacts for reproducibility.
 
 Legacy JSON exports remain consumable, but they require manual pairing of `results/inference/stabilized/` and `results/inference/unstabilized/` directories before running a notebook-equivalent aggregator. Prefer the Parquet flow unless backward compatibility is necessary. <!-- Over-engineering: Section mirrors existing doc to centralize expectations without adding new process complexity. -->

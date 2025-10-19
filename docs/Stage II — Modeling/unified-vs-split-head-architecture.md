@@ -293,7 +293,7 @@ def predict_with_uncertainty(model, x, n_samples=10):
 
 From the `CLIP_ViT-B32_improved.ipynb` notebook:
 - The **unified head architecture already demonstrated superior performance** over earlier baselines
-- This is the checkpoint you're trying to restore (`clip_vit-b32_model_improved_learner.pkl`)
+- This is the checkpoint you're trying to restore (`clip_vit-b32_improved_fixed.pkl`)
 - Empirical validation trumps theoretical preferences in POC settings
 
 ### Inference Requirements
@@ -433,4 +433,4 @@ def _maybe_load_weights(self, ckpt_path):
 
 For the Moodsic project, the **unified head architecture is the evidence-based choice**. It leverages proven empirical performance, aligns with dataset characteristics (small sample size, correlated targets), and maintains compatibility with MC Dropout uncertainty estimation. The split-head design offers modularity but sacrifices sample efficiency and correlation modeling without demonstrated gains—trade-offs that don't justify abandoning a validated architecture in a time-constrained POC.
 
-**Next Action**: Modify `clip_vit_scene_adapter.py` to use unified head, load the existing `clip_vit-b32_model_improved_learner.pkl` checkpoint, and validate deterministic inference on VEATIC.
+**Next Action**: Modify `clip_vit_scene_adapter.py` to use unified head, load the existing `clip_vit-b32_improved_fixed.pkl` checkpoint, and validate deterministic inference on VEATIC.

@@ -37,7 +37,7 @@ Notebook recipe:
 3. Freeze the backbone and train the heads for ten epochs with one-cycle
    scheduling (seeded by `learn.lr_find().valley`).
 4. Unfreeze selectively for five fine tune epochs before exporting
-   `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl` (the adapter now loads
+  `scene/checkpoints/clip_vit-b32_improved_fixed.pkl` (the adapter now loads
    this checkpoint by default).
 
 ## Phase 1 — EmoNet Integration + Domain Calibration

@@ -116,6 +116,7 @@ Key notes:
 - Update `data.findingemo_path` either via CLI override (shown above) or by editing the config to point at your local dataset.
 - The provided CLIP ViT-B/32 config inherits from `configs/base_config.yaml` and enables automatic LR discovery, WMSE/CCE losses, and Emo8 auxiliary supervision.
 - Other backbones (DINOv3, pretrained ResNet) are supported by the codebase; create a new YAML file that inherits from `base_config.yaml` and set `model.backbone_type` (`clip`, `dinov3`, or `imagenet`), `model.clip_model_name`, or `model.imagenet_backbone_name` as needed.
+- The production SceneCLIPAdapter auto-loads `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`, exported from `CLIP_ViT-B32_improved_fixed.ipynb` (test MAE: valence 0.3746 / arousal 0.4351 / average 0.4048 per `docs/Stage III — Training/scene_model_ablation.md`).
 - Use additional CLI overrides such as `--training.batch_size 16` or `--training.learning_rate 0.0001` to experiment without editing the YAML.
 
 Typical outputs land in `experiments/checkpoints/` and `logs/` directories defined in the config.

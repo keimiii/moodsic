@@ -3,13 +3,13 @@
 - [x] Define input/output shapes and types for each component (see sections below for the implemented adapters and processors).
 - [x] Specify device/batching behavior (documented per interface; all runtime paths default to batch size `1`).
 - [x] Handle no-face and edge cases explicitly (EmoNet adapter and face processor degrade gracefully to neutral predictions/`None`).
-- [x] Checkpoint/version naming conventions (scene adapter loads `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`; EmoNet adapter expects `models/emonet/pretrained/emonet_*.pth`).
+- [x] Checkpoint/version naming conventions (scene adapter loads `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`; EmoNet adapter expects `models/emonet/pretrained/emonet_*.pth`).
 
 ## Scene Adapter: SceneCLIPAdapter
 - Location: `models/scene/clip_vit_scene_adapter.py`
 - Constructor highlights:
   - `model_name="openai/clip-vit-base-patch32"`
-  - `tta` controls the default number of MC samples; `auto_load_best=True` loads `scene/checkpoints/clip_vit-b32_model_improved_learner.pkl`
+  - `tta` controls the default number of MC samples; `auto_load_best=True` loads `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`
 - `device="auto"` prefers CUDA -> MPS -> CPU
 - Input: raw frame `np.ndarray` in BGR order, shape `[H, W, 3]`
 - Output scale: reference space `[-1, 1]` for valence and arousal
