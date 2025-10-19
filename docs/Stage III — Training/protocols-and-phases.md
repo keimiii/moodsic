@@ -8,8 +8,8 @@
 - [✅] Run LR finder for Phase 0 and apply one-cycle schedule
   - Used in notebooks (`learn.lr_find().valley` + `fit_one_cycle`).
   - TODO: Record selected LRs per run in `docs/Stage III — Training/experiments-log.md` and `docs/Stage III — Training/hyperparameters.md`.
-- [ ] Validate fusion baseline on held-out set
-  - Baseline fusion implemented and tested; run dataset-level validation and log.
+- [✅] Validate fusion baseline on held-out set
+  - VEATIC batch export `results/inference/pipeline_results_20251006_144126.parquet` + aggregator `scripts/evaluation/aggregate_veatic_metrics.py:299` deliver clip-level MAE/variance tables; the fused pathway scores 0.193 (valence) / 0.161 (arousal) MAE on the held-out clips with stabilization parity logged in `results/evaluation/veatic_aggregate_20251006_144126.csv:1`.
   - Helpful: `scripts/fusion_threshold_tuning.py` for stability gating sweeps.
 
 References (key artifacts in repo):
@@ -110,7 +110,7 @@ res = fusion.perceive_and_fuse(frame_bgr)
 
 ## Next Actions (To‑Do)
 
-- Validate fusion baseline on a held-out set and log results in
-  `docs/Stage III — Training/experiments-log.md` (use `data/test.csv` and scene/face adapters).
+- Fold the VEATIC fusion validation summary into
+  `docs/Stage III — Training/experiments-log.md` and `hyperparameters.md`.
 - Record Phase 0 LR finder selections in `hyperparameters.md` and `experiments-log.md`.
 - Optional: extract the Phase 0 training flow from notebooks into a script/CLI for reproducibility.
