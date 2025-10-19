@@ -5,6 +5,7 @@ Emotion-aware music recommendation proof-of-concept that pairs VEATIC video anal
 ## Documentation
 
 - [App usage guide](docs/README_APP.md)
+- [Stage I — Data validation log](docs/Stage%20I%20%E2%80%94%20Data/data-validation.md)
 
 ## Installation
 
@@ -41,6 +42,7 @@ npm install
   ```
 - The Flask API expects DEAM audio at `data/DEAM/MEMD_audio/` and VEATIC assets at `data/VEATIC/` (`videos/`, `rating_averaged/`, and `shortlisted_videos/`).
 - Scripts such as `scripts/train_scene_model.py` and `scripts/evaluation/run_inference_pipeline.py` read and write from `data/` and `results/`; keep those directories writable.
+- Data health snapshot (counts, detected corrupt files, outstanding tasks) lives in the [Stage I — Data validation log](docs/Stage%20I%20%E2%80%94%20Data/data-validation.md); re-run the referenced notebooks after refreshing datasets.
 
 ## Running the Application
 
