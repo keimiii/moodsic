@@ -3,7 +3,7 @@ import os
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import polars as pl
-
+from constants import AVAILABLE_VIDEOS, VIDEO_ID_TO_COMMENTS, VIDEO_ID_TO_MATCH_RESULTS
 from helpers.process_video import process_video_for_emotion
 from helpers.song_recommendation import recommend_song
 from constants import (
@@ -20,28 +20,6 @@ CORS(app)
 # For now, we'll use static data instead of loading models
 # In a real implementation, you would load the trained models here
 scaler, gmm, songs_df = None, None, None
-
-AVAILABLE_VIDEOS = [
-    {"id": "0", "name": "Video 0", "filename": "0.mp4"},
-    {"id": "4", "name": "Video 4", "filename": "4.mp4"},
-    {"id": "12", "name": "Video 12", "filename": "12.mp4"},
-    {"id": "34", "name": "Video 34", "filename": "34.mp4"},
-    {"id": "40", "name": "Video 40", "filename": "40.mp4"},
-    {"id": "42", "name": "Video 42", "filename": "42.mp4"},
-    {"id": "44", "name": "Video 44", "filename": "44.mp4"},
-    {"id": "49", "name": "Video 49", "filename": "49.mp4"},
-    {"id": "53", "name": "Video 53", "filename": "53.mp4"},
-    {"id": "55", "name": "Video 55", "filename": "55.mp4"},
-    {"id": "60", "name": "Video 60", "filename": "60.mp4"},
-    {"id": "79", "name": "Video 79", "filename": "79.mp4"},
-    {"id": "81", "name": "Video 81", "filename": "81.mp4"},
-    {"id": "86", "name": "Video 86", "filename": "86.mp4"},
-    {"id": "95", "name": "Video 95", "filename": "95.mp4"},
-    {"id": "96", "name": "Video 96", "filename": "96.mp4"},
-    {"id": "102", "name": "Video 102", "filename": "102.mp4"},
-    {"id": "114", "name": "Video 114", "filename": "114.mp4"},
-    {"id": "120", "name": "Video 120", "filename": "120.mp4"},
-]
 
 @app.route('/api/videos')
 def get_videos():
@@ -98,7 +76,8 @@ def process_video():
             "arousal": emotion_result["arousal"],
             "cluster_id": emotion_result["cluster_id"],
             "song": song_recommendation,
-            "comments": "Some sort of comments" # TODO: Generate meaningful comments
+            "comments": VIDEO_ID_TO_COMMENTS.get(video_id, 'No comments available.'),
+            "match": VIDEO_ID_TO_MATCH_RESULTS.get(video_id, '-')
         }
         if "mae" in emotion_result:
             result["mae"] = emotion_result["mae"]

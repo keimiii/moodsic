@@ -45,25 +45,13 @@ npm install
 - Data health snapshot (counts, detected corrupt files, outstanding tasks) lives in the [Stage I — Data validation log](docs/Stage%20I%20%E2%80%94%20Data/data-validation.md); re-run the referenced notebooks after refreshing datasets.
 
 ## Running the Application
+**We deployed the application at https://moodsic-fe.onrender.com/**
 
-`run_app.sh` activates the virtualenv (when present), starts the Flask backend (`backend/run.py`), and launches the React development server:
+Alternatively, you can run the application using the following instructions:
 
-### 3. Run Application
 Ensure that Docker is running in the background.
 ```bash
 ./run_app.sh
-```
-
-The script assumes you have already run `npm install` in `frontend/`. To start the services manually:
-
-```bash
-source .venv/bin/activate.fish
-python backend/run.py  # http://localhost:5000
-```
-
-```bash
-cd frontend
-npm start  # http://localhost:3000
 ```
 
 ## Project Structure
