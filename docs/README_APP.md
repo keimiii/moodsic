@@ -35,7 +35,8 @@ The React frontend will be available at `http://localhost:3000` and will proxy A
 
 > **Note:** The compose setup mounts the local `data/` and `results/` directories into the backend container so it can access media assets and inference artifacts. Ensure those folders exist before starting the stack.
 
-### Backend Setup
+### Individual Setups
+#### Backend Setup
 
 1. Navigate to the backend directory:
    ```bash
@@ -54,7 +55,7 @@ The React frontend will be available at `http://localhost:3000` and will proxy A
 
    The backend will be available at `http://localhost:5000`
 
-### Frontend Setup
+#### Frontend Setup
 
 1. Navigate to the frontend directory:
    ```bash
