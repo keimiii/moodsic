@@ -34,6 +34,12 @@ function App() {
   const [isWarmingUp, setIsWarmingUp] = useState(false);
   const [backendWarmupError, setBackendWarmupError] = useState(null);
 
+  // If running locally, assume backend is ready and set the backend URL to http://localhost:5000
+  useEffect(() => {
+    if (!API_BASE_URL || API_BASE_URL.includes('localhost')) {
+      setIsBackendReady(true);
+    }
+  }, []);
   useEffect(() => () => {
     isMountedRef.current = false;
   }, []);

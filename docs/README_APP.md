@@ -24,8 +24,16 @@ A ReactJS Flask application that analyzes video emotions and recommends music ba
 - Node.js 16+
 - npm
 
-### Data Setup
-Unzip the data.zip
+### Docker (Backend + Frontend)
+
+From the project root folder, run the following bash script
+```bash
+./run_app.sh
+```
+
+The React frontend will be available at `http://localhost:3000` and will proxy API calls to the Flask backend running inside the compose network on port `5000`.
+
+> **Note:** The compose setup mounts the local `data/` and `results/` directories into the backend container so it can access media assets and inference artifacts. Ensure those folders exist before starting the stack.
 
 ### Backend Setup
 
@@ -65,22 +73,6 @@ Unzip the data.zip
    ```
 
    The frontend will be available at `http://localhost:3000`
-
-### Docker (Backend + Frontend)
-
-1. Build the containers:
-   ```bash
-   docker compose build
-   ```
-
-2. Start both services:
-   ```bash
-   docker compose up
-   ```
-
-   The React frontend will be available at `http://localhost:3000` and will proxy API calls to the Flask backend running inside the compose network on port `5000`.
-
-> **Note:** The compose setup mounts the local `data/` and `results/` directories into the backend container so it can access media assets and inference artifacts. Ensure those folders exist before starting the stack.
 
 ## Usage
 
