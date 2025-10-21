@@ -159,6 +159,26 @@ pytest -q
 
 If you need a headless OpenCV build for CI, install `opencv-python-headless` via `uv pip install "opencv-python-headless==4.12.0.88" --no-deps` and remove the GUI build from `requirements.txt`.
 
+## References & Attributions
+
+This prototype builds on openly shared research assets; the full bibliography lives in `references.bib`.
+
+- EmoNet face estimator by Toisoul et al. (2021) — [Nature Machine Intelligence](https://doi.org/10.1038/s42256-020-00280-0), code vendored under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) in `models/emonet/`.
+- VEATIC video dataset by Ren et al. (2024) — [WACV 2024](https://doi.org/10.1109/wacv57701.2024.00441).
+- DEAM music dataset by Aljanaki et al. (2017) — [PLOS ONE](https://doi.org/10.1371/journal.pone.0173392).
+- CLIP ViT-B/32 model by Radford et al. (2021) — [PMLR](https://proceedings.mlr.press/v139/radford21a.html).
+- HDBSCAN clustering by McInnes et al. (2017) — [JOSS](https://doi.org/10.21105/joss.00205).
+
+## Cite This Work
+
+If you use Moodsic in academic work, please cite this repository alongside the key components above. Citation-ready BibTeX entries are provided in `references.bib`, and a machine-readable summary is available in `CITATION.cff`.
+
+- `Moodsic` project — see `CITATION.cff` (preferred citation block).
+- `Toisoul_2021` — EmoNet continuous valence/arousal estimator.
+- `Ren_2024_WACV` — VEATIC dataset for video emotion tracking.
+- `10.1371/journal.pone.0173392` — DEAM dataset for music emotion analysis.
+- `pmlr-v139-radford21a` — CLIP vision-language backbone leveraged by the scene expert.
+
 # Frontend UI
 
 <placeholder>

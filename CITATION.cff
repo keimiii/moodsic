@@ -1,0 +1,120 @@
+cff-version: 1.2.0
+message: If you use this project in your research, please cite it and the key datasets and models it depends on.
+title: Moodsic
+type: software
+abstract: >-
+  Moodsic is a proof-of-concept pipeline that fuses VEATIC video affect predictions
+  with DEAM music metadata to recommend emotion-aligned tracks. It combines a CLIP-based
+  scene expert, an EmoNet face expert, fusion logic, and clustering-based playlist retrieval.
+authors:
+  - family-names: Choy
+    given-names: Yong Yi Desmond
+    affiliation: National University of Singapore
+  - family-names: Manuel
+    given-names: Kevin
+    affiliation: National University of Singapore
+  - family-names: Leong
+    given-names: Kay Mei
+    affiliation: National University of Singapore
+  - family-names: Loke
+    given-names: Yuen Ying
+    name-suffix: Jodie
+    affiliation: National University of Singapore
+date-released: 2025-10-21
+keywords:
+  - emotion recognition
+  - music recommendation
+  - VEATIC
+  - DEAM
+  - EmoNet
+preferred-citation:
+  type: software
+  title: Moodsic
+  year: 2025
+  url: https://github.com/desmondchoy/emo-rec
+  authors:
+    - family-names: Choy
+      given-names: Yong Yi Desmond
+    - family-names: Manuel
+      given-names: Kevin
+    - family-names: Leong
+      given-names: Kay Mei
+    - family-names: Loke
+      given-names: Yuen Ying
+      name-suffix: Jodie
+references:
+  - type: article
+    title: Estimation of continuous valence and arousal levels from faces in naturalistic conditions
+    doi: 10.1038/s42256-020-00280-0
+    year: 2021
+    authors:
+      - family-names: Toisoul
+        given-names: Antoine
+      - family-names: Kossaifi
+        given-names: Jean
+      - family-names: Bulat
+        given-names: Adrian
+      - family-names: Tzimiropoulos
+        given-names: Georgios
+      - family-names: Pantic
+        given-names: Maja
+  - type: proceedings-article
+    title: VEATIC: Video-Based Emotion and Affect Tracking in Context Dataset
+    doi: 10.1109/wacv57701.2024.00441
+    year: 2024
+    authors:
+      - family-names: Ren
+        given-names: Zhihang
+      - family-names: Ortega
+        given-names: Jefferson
+      - family-names: Wang
+        given-names: Yifan
+      - family-names: Chen
+        given-names: Zhimin
+      - family-names: Guo
+        given-names: Yunhui
+      - family-names: Yu
+        given-names: Stella X.
+      - family-names: Whitney
+        given-names: David
+  - type: article
+    title: Developing a benchmark for emotional analysis of music
+    doi: 10.1371/journal.pone.0173392
+    year: 2017
+    authors:
+      - family-names: Aljanaki
+        given-names: Anna
+      - family-names: Yang
+        given-names: Yi-Hsuan
+      - family-names: Soleymani
+        given-names: Mohammad
+  - type: proceedings-article
+    title: Learning Transferable Visual Models From Natural Language Supervision
+    year: 2021
+    url: https://proceedings.mlr.press/v139/radford21a.html
+    authors:
+      - family-names: Radford
+        given-names: Alec
+      - family-names: Kim
+        given-names: Jong Wook
+      - family-names: Hallacy
+        given-names: Chris
+      - family-names: Ramesh
+        given-names: Aditya
+      - family-names: Goh
+        given-names: Gabriel
+      - family-names: Agarwal
+        given-names: Sandhini
+      - family-names: Sastry
+        given-names: Girish
+      - family-names: Askell
+        given-names: Amanda
+      - family-names: Mishkin
+        given-names: Pamela
+      - family-names: Clark
+        given-names: Jack
+      - family-names: Krueger
+        given-names: Gretchen
+      - family-names: Sutskever
+        given-names: Ilya
+notes: Full BibTeX entries for these and additional sources are maintained in references.bib.
