@@ -1,20 +1,24 @@
 # Emotion-Based Music Recommendation App
 
-A ReactJS Flask application that analyzes video emotions and recommends music based on valence and arousal scores.
+A React + Flask application that visualizes VEATIC videos, shows fused emotion
+estimates, and recommends DEAM songs based on valence/arousal.
 
 ## Features
 
-- **Video Selection**: Choose from preselected videos (4.mp4, 44.mp4, 60.mp4 from VEATIC dataset)
-- **Emotion Analysis**: Extract valence and arousal scores (currently using static values)
-- **Cluster Visualization**: Interactive 2D plot showing emotion clusters
-- **Music Recommendation**: Get song recommendations based on emotion analysis
-- **Audio Playback**: Play recommended songs directly in the browser
+- **Video selection**: Choose from a curated set of VEATIC clips
+- **Emotion analysis (fused)**: Loads fused valence/arousal means from cached
+  VEATIC pipeline results (Parquet), not random values
+- **Cluster visualization**: Interactive 2D plot of clustered DEAM tracks
+- **Music recommendation**: Picks the nearest DEAM track to the fused mean
+- **Audio playback**: Play recommended songs in the browser alongside the video
 
 ## Architecture
 
-- **Frontend**: ReactJS with Canvas-based cluster visualization
-- **Backend**: Flask API with video processing endpoints
-- **Data**: DEAM dataset for music recommendations
+- **Frontend**: React with Canvas-based cluster visualization
+- **Backend**: Flask API that serves VEATIC video assets, fused emotion
+  summaries, and DEAM song recommendations
+- **Artifacts**: Precomputed VEATIC pipeline Parquet and DEAM clustered CSV
+  configured in `backend/constants.py`
 
 ## Setup Instructions
 
@@ -31,7 +35,8 @@ From the project root folder, run the following bash script
 ./run_app.sh
 ```
 
-The React frontend will be available at `http://localhost:3000` and will proxy API calls to the Flask backend running inside the compose network on port `5000`.
+The React frontend runs at `http://localhost:3000` and proxies API calls to the
+Flask backend inside the compose network on port `5000`.
 
 > **Note:** The compose setup mounts the local `data/` and `results/` directories into the backend container so it can access media assets and inference artifacts. Ensure those folders exist before starting the stack.
 
@@ -77,28 +82,34 @@ The React frontend will be available at `http://localhost:3000` and will proxy A
 
 ## Usage
 
-1. Open your browser and go to `http://localhost:3000`
-2. Select one of the available videos (Video 4, Video 44, or Video 60)
-3. Click "Analyze" to process the selected video
-4. View the emotion analysis results and cluster visualization
+1. Open `http://localhost:3000`
+2. Select a VEATIC video from the list
+3. Click "Analyze" to load fused VA from the cached pipeline results
+4. View fused/pathway metrics and the cluster visualization
 5. Listen to the recommended song
 
 ## API Endpoints
 
-- `GET /api/videos` - Get list of available videos
-- `GET /api/video/<video_id>` - Serve video file for a given video ID
-- `POST /api/process-video` - Process selected video and return emotion analysis
-- `GET /api/song/<song_id>` - Serve audio file for a given song ID
-- `GET /api/clusters` - Get cluster information for visualization
-- `GET /api/health` - Health check endpoint
+- `GET /api/videos` — Enumerate available VEATIC videos
+- `GET /api/video/<video_id>` — Stream video asset
+- `POST /api/process-video` — Return fused VA, per-pathway stats, and a song
+- `GET /api/song/<song_id>` — Stream DEAM audio file
+- `GET /api/clusters` — Cluster metadata + points for visualization
+- `GET /api/health` — Basic readiness probe
 
 ## Current Implementation
 
-This is a proof-of-concept implementation using static data:
+Proof-of-concept using cached artifacts (no live PERCEIVE in the demo):
 
-- **Emotion Analysis**: Returns random valence/arousal values from predefined scenes
-- **Song Recommendations**: Uses static song data mapped to clusters
-- **Clusters**: Predefined cluster information for visualization
+- **Emotion analysis**: Reads fused valence/arousal means per video from the
+  VEATIC pipeline Parquet (`backend/constants.py:PIPELINE_RESULTS_PATH`).
+- **Song recommendation**: Uses the clustered DEAM catalog and picks the nearest
+  track to the fused mean (see `backend/helpers/process_video.py`).
+- **Clusters**: Served from a CSV artifact (`/api/clusters`) for the frontend
+  visualization.
+
+For the live inference pipeline (PERCEIVE → STABILIZE → MATCH), see
+`docs/Stage IV — Inference/runtime-pipeline.md`.
 
 ## Future Enhancements
 
@@ -129,14 +140,15 @@ This is a proof-of-concept implementation using static data:
 
 ## Notes
 
-- The application currently uses mock data for demonstration purposes
-- Audio files are served from `data/deam/MEMD_audio/` directory
-- The cluster visualization is based on the design from `docs/Stage V — App/index.html`
+- The demo does not run models; it reads cached VEATIC results for
+  determinism. Audio files are served from `data/deam/MEMD_audio/`.
+- The cluster visualization follows the design in
+  `docs/Stage V — App/index.html`.
 
 
 Todos:
-- [x] Fetch results from parquet
-- [x] Pick top 10 songs
+- [x] Fetch results from Parquet
 - [x] Play music with video
-- [x] Analysis (face, scenes, fusion - see which one is used!)
-- [ ] Display both clusters (GMM and HDBSCAN, can toggle)
+- [x] Show analysis (scene, face, fusion) and which one is used
+- [ ] Display both clusterings (GMM and HDBSCAN) with a toggle
+- [ ] Add live inference path via the runtime driver
