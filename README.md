@@ -1,6 +1,6 @@
 # Moodsic
 
-Emotion-aware music recommendation proof-of-concept that pairs VEATIC video analytics with the DEAM music catalogue. The repository bundles a Flask backend, a React dashboard, dataset preparation scripts, training utilities, and VEATIC evaluation pipelines to support rapid research iteration.
+Emotion-aware music recommendation proof-of-concept that pairs VEATIC video analytics with the DEAM music catalogue. Professors and reviewers can interact with the hosted experience at https://moodsic-fe.onrender.com/, while this repository curates supporting datasets, research artefacts, and the React-based dashboard.
 
 ## Documentation
 
@@ -22,12 +22,12 @@ Emotion-aware music recommendation proof-of-concept that pairs VEATIC video anal
    ```bash
    uv pip install -r requirements.txt
    ```
-4. For inference/evaluation tooling install the extra set (includes pyarrow, fastai, etc.):
+4. For inference/evaluation CLI tooling install the extra set (adds torch, pyarrow, MediaPipe, CLIP, etc. used by the offline pipelines):
    ```bash
    uv pip install -r requirements_inference.txt
    ```
 
-### Frontend dependencies
+### Frontend dependencies (optional local preview)
 Install the React dependencies once:
 ```bash
 cd frontend
@@ -35,48 +35,38 @@ npm install
 ```
 
 ### Dataset setup
-- FindingEmo imagery lives under `data/Run_1` and `data/Run_2`. To re-download:
+- FindingEmo imagery lives under `data/Run_1` and `data/Run_2`. To re-download with custom parallelism (defaults are `--workers 20 --timeout 30`):
   ```bash
   source .venv/bin/activate.fish
   python scripts/findingemo_parallel_download.py --target-dir data --workers 100 --timeout 15
   ```
-- The Flask API expects DEAM audio at `data/DEAM/MEMD_audio/` and VEATIC assets at `data/VEATIC/` (`videos/`, `rating_averaged/`, and `shortlisted_videos/`).
-- Scripts such as `scripts/train_scene_model.py` and `scripts/evaluation/run_inference_pipeline.py` read and write from `data/` and `results/`; keep those directories writable.
+- Offline research scripts such as `scripts/train_scene_model.py`, `scripts/evaluation/run_inference_pipeline.py`, and `scripts/clustering/deam_clusters.py` expect to work against the root-level `data/` and `results/` directories; keep those writable and synced with your datasets.
 - Data health snapshot (counts, detected corrupt files, outstanding tasks) lives in the [Stage I — Data validation log](docs/Stage%20I%20%E2%80%94%20Data/data-validation.md); re-run the referenced notebooks after refreshing datasets.
 
 ## Running the Application
-**We deployed the application at https://moodsic-fe.onrender.com/**
-
-Alternatively, you can run the application using the following instructions:
-
-Ensure that Docker is running in the background.
-```bash
-./run_app.sh
-```
+Visit https://moodsic-fe.onrender.com/ for the fully provisioned demo environment. The hosted deployment mirrors the research settings documented below, so no local setup is required for classroom evaluations.
 
 ## Project Structure
 ```
 emo-rec/
-├── backend/                             # Flask API + helpers
-│   ├── app.py
-│   ├── constants.py
-│   ├── helpers/
-│   └── run.py
 ├── configs/                             # YAML configs for training
 │   ├── base_config.yaml
 │   ├── face_models/
 │   └── scene_models/
-├── data/                                # Local datasets (FindingEmo, DEAM, VEATIC, splits)
+├── data/                                # Full datasets & splits used by training/inference scripts
+├── deploy/                              # Runtime env templates and image push notes
 ├── docs/                                # Extended guides and research notes
 │   └── README_APP.md                    # Focused app usage guide
-├── frontend/                            # React dashboard (src/App.js, styles)
+├── frontend/                            # React dashboard
+│   ├── public/runtime-env.js            # Runtime API shim (overridden in deploy/)
+│   └── src/App.js
 ├── notebooks/                           # Research notebooks + exported artifacts
 ├── results/                             # Saved inference/evaluation outputs
 ├── scene/                               # Pretrained checkpoints used by the pipelines
 ├── scripts/                             # CLI tools (dataset prep, training, evaluation, clustering)
 ├── src/                                 # Python package with models/data/utils modules
 ├── tests/                               # Pytest suite for fusion + recommendation logic
-├── run_app.sh
+├── utils/                               # Runtime helpers (perceive_once, face processor, etc.)
 ├── requirements.txt
 ├── requirements_inference.txt
 └── AGENTS.md
@@ -84,10 +74,10 @@ emo-rec/
 
 ## Data Assets
 
-- `data/Run_1` and `data/Run_2`: FindingEmo labelled images used by the scene model trainer.
-- `data/VEATIC`: VEATIC videos (`videos/`), evaluation label averages (`rating_averaged/`), and `shortlisted_videos/` clips served by the demo.
-- `data/DEAM`: DEAM audio under `MEMD_audio/` consumed by `GET /api/song/<song_id>`.
-- `results/inference` and `results/evaluation`: Pipeline outputs referenced by the backend (e.g., `pipeline_results_20251006_144126.parquet`) and evaluation notebooks.
+- `data/Run_1` and `data/Run_2`: FindingEmo labelled images used when training scene models from scratch.
+- `data/VEATIC`: Full VEATIC dataset (videos and averaged ratings) used by offline inference/evaluation scripts.
+- `data/DEAM`: Source metadata, annotations, and GMM-ready CSVs for music clustering experiments.
+- `results/inference`, `results/evaluation`, and `results/clustering`: Offline pipeline exports for VEATIC runs and DEAM GMM bundles that back the hosted insights.
 
 ## Scene Model Training
 
@@ -101,7 +91,7 @@ python scripts/train_scene_model.py \
 ```
 
 Key notes:
-- Update `data.findingemo_path` either via CLI override (shown above) or by editing the config to point at your local dataset.
+- Update `data.findingemo_path` via CLI override (shown above) or edit the YAML to match your local FindingEmo directory (the checked-in CLIP config still carries a contributor’s absolute path).
 - The provided CLIP ViT-B/32 config inherits from `configs/base_config.yaml` and enables automatic LR discovery, WMSE/CCE losses, and Emo8 auxiliary supervision.
 - Other backbones (DINOv3, pretrained ResNet) are supported by the codebase; create a new YAML file that inherits from `base_config.yaml` and set `model.backbone_type` (`clip`, `dinov3`, or `imagenet`), `model.clip_model_name`, or `model.imagenet_backbone_name` as needed.
 - The production SceneCLIPAdapter auto-loads `scene/checkpoints/clip_vit-b32_improved_fixed.pkl`, exported from `CLIP_ViT-B32_improved_fixed.ipynb` (test MAE: valence 0.3746 / arousal 0.4351 / average 0.4048 per `docs/Stage III — Training/scene_model_ablation.md`).
@@ -157,6 +147,8 @@ source .venv/bin/activate.fish
 pytest -q
 ```
 
+The suite expects optional dependencies such as MediaPipe, transformers, and OpenCV, plus sample FindingEmo frames under `data/Run_2`; tests skip gracefully whenever assets are missing.
+
 If you need a headless OpenCV build for CI, install `opencv-python-headless` via `uv pip install "opencv-python-headless==4.12.0.88" --no-deps` and remove the GUI build from `requirements.txt`.
 
 ## References & Attributions
@@ -179,9 +171,15 @@ If you use Moodsic in academic work, please cite this repository alongside the k
 - `10.1371/journal.pone.0173392` — DEAM dataset for music emotion analysis.
 - `pmlr-v139-radford21a` — CLIP vision-language backbone leveraged by the scene expert.
 
-# Frontend UI
+## Frontend UI
 
-<placeholder>
+The React client in `frontend/src/App.js` orchestrates the demo experience:
+- When the page loads it performs a brief warm-up handshake so the hosted services are ready before interaction.
+- The video selector lists the curated VEATIC clips available in the demo, and the animated canvas visualises their emotion clusters in real time.
+- Selecting **Process video** surfaces fused valence/arousal predictions, per-pathway MAE and variance cards, curator comments, and match annotations drawn from the research artefacts.
+- Recommended tracks stream directly in the browser; playback controls keep the VEATIC clip and DEAM audio in sync and surface time metadata.
+- The component handles autoplay restrictions gracefully (`playSong`/`togglePlayPause`) and offers a retry button whenever the warm-up handshake fails.
+- Styling lives alongside `frontend/src/index.css`, and `frontend/start.sh` boots the npm dev server if `node_modules/` is absent.
 
 # Evaluation
 
