@@ -4,11 +4,11 @@ Emotion-aware music recommendation proof-of-concept that pairs VEATIC video anal
 
 # Project Deliverables
 
-- Datasets: https://drive.google.com/drive/folders/15FHnS5SSS00xX7y4bmfozdJgBs5gZFLE?usp=drive_link
-- Project Final Report: <placeholder>
-- Video Presentation File: https://drive.google.com/file/d/17GZnaFUjt__6W-HUUay1-8oZlEzrgWCj/view?usp=drive_link
-- 1st Slides (Presentation): https://drive.google.com/file/d/1DfQ_Zuwvx5390dxHdFPtnU5Zo9q9IREc/view?usp=drive_link
-- 2nd Slides (Video): https://drive.google.com/file/d/1_5qDyStaQX3NTKpbBVMqPpfPp7R6KXtt/view?usp=drive_link
+- Datasets: [Link](https://drive.google.com/drive/folders/15FHnS5SSS00xX7y4bmfozdJgBs5gZFLE?usp=drive_link)
+- Project Final Report: [Link](https://drive.google.com/file/d/1DMZ6VkPCn3PqNDPJzFKuWYp1-NSp-kgT/view?usp=drive_link)
+- Video Presentation File: [Link](https://drive.google.com/file/d/17GZnaFUjt__6W-HUUay1-8oZlEzrgWCj/view?usp=drive_link)
+- 1st Slides (Presentation): [Link](https://drive.google.com/file/d/1DfQ_Zuwvx5390dxHdFPtnU5Zo9q9IREc/view?usp=drive_link)
+- 2nd Slides (Video): [Link](https://drive.google.com/file/d/1_5qDyStaQX3NTKpbBVMqPpfPp7R6KXtt/view?usp=drive_link)
 
 ## Key Documentation
 
